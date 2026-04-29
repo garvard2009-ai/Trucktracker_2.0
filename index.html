@@ -590,7 +590,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);font
 <!-- ===== FIREBASE ===== -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged }
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged, browserLocalPersistence, setPersistence }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection,
   getDocs, onSnapshot, serverTimestamp, query, orderBy }
@@ -618,6 +618,9 @@ const ADMIN_UID = "ECAk0tINcwg0HKQnlQVW7Dqfbdl2";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Remember login between sessions
+setPersistence(auth, browserLocalPersistence).catch(e => console.warn('Persistence error:', e));
 
 let currentUser = null;
 let unsubscribeData = null;
@@ -736,7 +739,12 @@ function subscribeToData(uid) {
   unsubscribeData = onSnapshot(dataRef, (snap) => {
     if (snap.exists()) {
       const remote = snap.data();
-      if (!window._localDirty) {
+      // Always apply remote data unless user has made local changes since last sync
+      const remoteTime = remote.updatedAt?.seconds || 0;
+      const localTime = window._lastSyncTime || 0;
+      const hasNewerRemote = remoteTime > localTime;
+
+      if (hasNewerRemote || !window._localDirty) {
         window.state = {
           trips: remote.trips || [],
           cats: remote.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
@@ -748,10 +756,13 @@ function subscribeToData(uid) {
           const s = [...window.state.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0));
           window.state.currentTripId = s[0].id;
         }
-        // Cache to localStorage for fast startup
+        window._localDirty = false;
+        window._lastSyncTime = remoteTime;
         try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
         loadTripForm();
         updateSelector();
+        if(document.getElementById('screen-summary').classList.contains('active')) renderSummary();
+        if(document.getElementById('screen-ops').classList.contains('active')) renderOps(currentFilter);
       }
     } else {
       pushToFirestore();
@@ -777,6 +788,8 @@ window._saveToCloud = async function() {
       updatedAt: serverTimestamp()
     });
     window._localDirty = false;
+    // Record sync time (approximate, server time slightly ahead)
+    window._lastSyncTime = Math.floor(Date.now() / 1000);
     setSyncStatus('ok');
   } catch(e) {
     console.error('Save error', e);
