@@ -1,14 +1,12 @@
-const CACHE_NAME = 'reystracker-v1';
+const CACHE_NAME = 'reystracker-v2';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icons/icon-192x192.png',
-  './icons/icon-512x512.png',
-  'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800&display=swap'
+  './icons/icon-512x512.png'
 ];
 
-// Install — cache core assets
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
@@ -16,7 +14,6 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-// Activate — clean old caches
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -26,26 +23,29 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Fetch — cache first for assets, network first for Firebase
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Firebase requests — always network
-  if (url.hostname.includes('firebase') || url.hostname.includes('google')) {
-    return;
-  }
+  // Skip non-http requests (chrome-extension, etc.)
+  if (!url.protocol.startsWith('http')) return;
 
-  // App assets — cache first, fallback to network
+  // Skip Firebase and Google requests — always network
+  if (url.hostname.includes('firebase') ||
+      url.hostname.includes('firestore') ||
+      url.hostname.includes('googleapis') ||
+      url.hostname.includes('google')) return;
+
+  // App assets — cache first
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(response => {
-        if (response && response.status === 200) {
+        if (response && response.status === 200 && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         }
         return response;
-      });
+      }).catch(() => cached);
     })
   );
 });
