@@ -460,11 +460,28 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);font
   <div class="admin-content">
     <div class="admin-tabs">
       <button class="admin-tab active" id="atab-users" onclick="switchAdminTab('users')">👥 Водители</button>
+      <button class="admin-tab" id="atab-invite" onclick="switchAdminTab('invite')">✉️ Доступ</button>
       <button class="admin-tab" id="atab-stats" onclick="switchAdminTab('stats')">📊 Статистика</button>
     </div>
+
     <div id="adminTabUsers">
       <div id="adminUsersList"><div class="empty"><div class="spinner"></div></div></div>
     </div>
+
+    <div id="adminTabInvite" style="display:none">
+      <div style="background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:12px;border:1px solid var(--border)">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;color:var(--accent);margin-bottom:8px">➕ Добавить доступ по Email</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Введите Google-почту водителя. Когда он войдёт через Google — сразу получит доступ без ожидания.</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="email" id="inviteEmail" placeholder="email@gmail.com" class="settings-input" style="flex:1"/>
+          <button class="btn btn-primary btn-sm" onclick="addInvite()">Добавить</button>
+        </div>
+        <div id="inviteStatus" style="font-size:12px;min-height:16px;text-align:center"></div>
+      </div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;color:var(--text);margin-bottom:8px">📋 Список разрешённых email</div>
+      <div id="inviteList"><div class="empty"><div class="spinner"></div></div></div>
+    </div>
+
     <div id="adminTabStats" style="display:none">
       <div class="admin-stat-grid" id="adminStatsGrid">
         <div class="admin-stat-box"><div class="admin-stat-label">Всего водителей</div><div class="admin-stat-val" id="astatTotal">—</div></div>
@@ -575,7 +592,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);font
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection,
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection,
   getDocs, onSnapshot, serverTimestamp, query, orderBy }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -583,13 +600,12 @@ import { getFirestore, doc, getDoc, setDoc, updateDoc, collection,
 // 🔥 ВСТАВЬ СЮДА СВОИ ДАННЫЕ ИЗ FIREBASE CONSOLE
 // =====================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyD7iLlVr14XP82-n6xb_Tas9oA77MJN5SQ",
-  authDomain: "reystracker.firebaseapp.com",
-  databaseURL: "https://reystracker-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "reystracker",
-  storageBucket: "reystracker.firebasestorage.app",
-  messagingSenderId: "725021233607",
-  appId: "1:725021233607:web:5e588ab55a3a8ab35809e2"
+  apiKey: "AIzaSyAzmSaZxMLEkC9J8bnkT4MVnhWJjvrNL9E",
+  authDomain: "trucktracker2-bbf9a.firebaseapp.com",
+  projectId: "trucktracker2-bbf9a",
+  storageBucket: "trucktracker2-bbf9a.firebasestorage.app",
+  messagingSenderId: "1098312404423",
+  appId: "1:1098312404423:web:9f140ee3f724edd2735de2"
 };
 // =====================================================
 // ID твоего аккаунта Google — он станет администратором
@@ -642,12 +658,17 @@ onAuthStateChanged(auth, async (user) => {
   const userRef = doc(db, 'users', user.uid);
   const snap = await getDoc(userRef);
   if (!snap.exists()) {
+    // Check if email is pre-invited
+    const emailKey = user.email.toLowerCase().replace(/\./g, '_');
+    const inviteSnap = await getDoc(doc(db, 'invites', emailKey));
+    const isInvited = inviteSnap.exists();
+
     await setDoc(userRef, {
       uid: user.uid,
       email: user.email,
       name: user.displayName || '',
       photo: user.photoURL || '',
-      status: user.uid === ADMIN_UID ? 'approved' : 'pending',
+      status: (user.uid === ADMIN_UID || isInvited) ? 'approved' : 'pending',
       isAdmin: user.uid === ADMIN_UID,
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp()
@@ -799,10 +820,13 @@ window.closeAdmin = () => {
 
 window.switchAdminTab = (tab) => {
   document.getElementById('adminTabUsers').style.display = tab === 'users' ? '' : 'none';
+  document.getElementById('adminTabInvite').style.display = tab === 'invite' ? '' : 'none';
   document.getElementById('adminTabStats').style.display = tab === 'stats' ? '' : 'none';
   document.getElementById('atab-users').classList.toggle('active', tab === 'users');
+  document.getElementById('atab-invite').classList.toggle('active', tab === 'invite');
   document.getElementById('atab-stats').classList.toggle('active', tab === 'stats');
   if (tab === 'stats') loadAdminStats();
+  if (tab === 'invite') loadInviteList();
 };
 
 async function loadAdminUsers() {
@@ -920,6 +944,78 @@ window.adminUnblock = async (uid) => {
   await updateDoc(doc(db, 'users', uid), { status: 'approved' });
   showToast('🔓 Доступ восстановлен', 'success');
   loadAdminUsers();
+};
+
+// ===== INVITE BY EMAIL =====
+window.addInvite = async () => {
+  const emailInput = document.getElementById('inviteEmail');
+  const status = document.getElementById('inviteStatus');
+  const email = emailInput.value.trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    status.textContent = '⚠️ Введите корректный email';
+    status.style.color = 'var(--red)';
+    return;
+  }
+  try {
+    // Check if already in invites
+    const inviteRef = doc(db, 'invites', email.replace(/\./g, '_'));
+    const snap = await getDoc(inviteRef);
+    if (snap.exists()) {
+      status.textContent = '⚠️ Этот email уже добавлен';
+      status.style.color = 'var(--accent)';
+      return;
+    }
+    // Check if user already exists — approve directly
+    const usersSnap = await getDocs(collection(db, 'users'));
+    let foundUid = null;
+    usersSnap.forEach(d => { if (d.data().email === email) foundUid = d.id; });
+    if (foundUid) {
+      await updateDoc(doc(db, 'users', foundUid), { status: 'approved' });
+      showToast('✅ Пользователь уже есть — одобрен', 'success');
+    }
+    // Save invite
+    await setDoc(inviteRef, { email, addedAt: serverTimestamp(), addedBy: currentUser.uid });
+    emailInput.value = '';
+    status.textContent = '✅ Добавлено! Пользователь получит доступ при входе.';
+    status.style.color = 'var(--green)';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+    loadInviteList();
+  } catch(e) {
+    status.textContent = '❌ Ошибка: ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+};
+
+async function loadInviteList() {
+  const list = document.getElementById('inviteList');
+  list.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    const snap = await getDocs(collection(db, 'invites'));
+    if (!snap.docs.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0;text-align:center">Список пуст — добавьте email выше</div>';
+      return;
+    }
+    list.innerHTML = snap.docs.map(d => {
+      const inv = d.data();
+      const date = inv.addedAt?.seconds ? new Date(inv.addedAt.seconds*1000).toLocaleDateString('ru-RU') : '—';
+      return `<div style="background:var(--card2);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border)">
+        <div>
+          <div style="font-weight:700;font-size:14px">${inv.email}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Добавлен: ${date}</div>
+        </div>
+        <button class="cat-del" onclick="removeInvite('${d.id}','${inv.email}')">✕</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="alert alert-err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+window.removeInvite = async (docId, email) => {
+  if (!confirm(`Убрать доступ для ${email}?`)) return;
+  await deleteDoc(doc(db, 'invites', docId));
+  showToast('Удалено', 'success');
+  loadInviteList();
 };
 
 window.adminViewDetails = async (uid) => {
