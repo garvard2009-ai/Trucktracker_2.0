@@ -661,6 +661,9 @@ onAuthStateChanged(auth, async (user) => {
   const userRef = doc(db, 'users', user.uid);
   const snap = await getDoc(userRef);
   if (!snap.exists()) {
+  const isAdmin = user.uid === ADMIN_UID;
+
+  if (!snap.exists()) {
     // Check if email is pre-invited
     const emailKey = user.email.toLowerCase().replace(/\./g, '_');
     const inviteSnap = await getDoc(doc(db, 'invites', emailKey));
@@ -671,13 +674,16 @@ onAuthStateChanged(auth, async (user) => {
       email: user.email,
       name: user.displayName || '',
       photo: user.photoURL || '',
-      status: (user.uid === ADMIN_UID || isInvited) ? 'approved' : 'pending',
-      isAdmin: user.uid === ADMIN_UID,
+      status: (isAdmin || isInvited) ? 'approved' : 'pending',
+      isAdmin: isAdmin,
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp()
     });
   } else {
-    await updateDoc(userRef, { lastSeen: serverTimestamp(), name: user.displayName||'', photo: user.photoURL||'' });
+    // Always fix admin status in case it was wrong
+    const updates = { lastSeen: serverTimestamp(), name: user.displayName||'', photo: user.photoURL||'' };
+    if (isAdmin) { updates.status = 'approved'; updates.isAdmin = true; }
+    await updateDoc(userRef, updates);
   }
 
   const userData = (await getDoc(userRef)).data();
