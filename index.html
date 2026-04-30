@@ -657,11 +657,9 @@ onAuthStateChanged(auth, async (user) => {
   }
   currentUser = user;
 
-  // Register user in Firestore if new
+  const isAdmin = user.uid === ADMIN_UID;
   const userRef = doc(db, 'users', user.uid);
   const snap = await getDoc(userRef);
-  if (!snap.exists()) {
-  const isAdmin = user.uid === ADMIN_UID;
 
   if (!snap.exists()) {
     // Check if email is pre-invited
