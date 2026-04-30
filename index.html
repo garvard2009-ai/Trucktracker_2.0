@@ -628,6 +628,10 @@ let unsubscribeData = null;
 // Expose to global scope
 window._db = db;
 window._auth = auth;
+window._firestoreAPI = {
+  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, getDocs, onSnapshot, serverTimestamp, query, orderBy
+};
 window._ADMIN_UID = ADMIN_UID;
 
 // ===== AUTH =====
@@ -687,7 +691,7 @@ onAuthStateChanged(auth, async (user) => {
   const userData = (await getDoc(userRef)).data();
 
   if (user.uid === ADMIN_UID || userData.status === 'approved') {
-    showMainApp(user, userData);
+    await showMainApp(user, userData);
     subscribeToData(user.uid);
   } else if (userData.status === 'blocked') {
     showPendingScreen(user, 'blocked');
@@ -794,7 +798,7 @@ function subscribeToData(uid) {
     }
 
     window.state = newState;
-    state = newState;
+    if (typeof state !== 'undefined') state = newState;
     window._lastSyncTime = remoteTime;
 
     try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
@@ -802,6 +806,7 @@ function subscribeToData(uid) {
     const active = document.activeElement;
     const userIsTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
 
+    window._initializing = true;
     if (!userIsTyping) {
       loadTripForm();
     }
@@ -810,7 +815,9 @@ function subscribeToData(uid) {
     if(document.getElementById('screen-summary').classList.contains('active')) renderSummary();
     if(document.getElementById('screen-ops').classList.contains('active')) renderOps(currentFilter);
 
+    setTimeout(() => { window._initializing = false; }, 500);
     setSyncStatus('ok');
+    console.log('[SYNC] ✅ Applied');
   }, (err) => {
     console.error('[SYNC] Firestore error', err);
     setSyncStatus('error');
@@ -1169,10 +1176,14 @@ function loadFromCache() {
 }
 
 async function initAppState() {
-  if (currentUser) {
+  const user = window._currentUser;
+  const db = window._db;
+
+  if (user && db && window._firestoreAPI) {
     try {
-      const dataRef = doc(db, 'users', currentUser.uid, 'appdata', 'main');
-      const snap = await getDoc(dataRef);
+      const { doc: docFn, getDoc: getDocFn } = window._firestoreAPI;
+      const dataRef = docFn(db, 'users', user.uid, 'appdata', 'main');
+      const snap = await getDocFn(dataRef);
       if (snap.exists()) {
         const remote = snap.data();
         window.state = {
@@ -1183,15 +1194,17 @@ async function initAppState() {
           currencies: remote.currencies || null
         };
         window._lastSyncTime = remote.updatedAt?.seconds || 0;
-        console.log('[INIT] Loaded from cloud:', window.state.trips.length, 'trips');
+        console.log('[INIT] ✅ Loaded from cloud:', window.state.trips.length, 'trips');
       } else {
+        console.log('[INIT] No cloud doc yet, loading cache');
         loadFromCache();
       }
     } catch(e) {
-      console.error('[INIT] Cloud load failed, using cache', e);
+      console.error('[INIT] ❌ Cloud load failed:', e);
       loadFromCache();
     }
   } else {
+    console.warn('[INIT] No user/db available, using cache. user=', !!user, 'db=', !!db);
     loadFromCache();
   }
 
@@ -1207,18 +1220,24 @@ async function initAppState() {
     state.currentTripId = s[0].id;
   }
   window._localDirty = false;
+  window._initializing = true;
   loadTripForm();
   updateSelector();
+  setTimeout(() => { window._initializing = false; }, 1000);
 }
 
 function save() {
+  if (window._initializing) {
+    console.log('[SAVE] Ignored during init');
+    return;
+  }
   window._localDirty = true;
   try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
   if(window._saveTimer) clearTimeout(window._saveTimer);
   window._saveTimer = setTimeout(() => {
     window._saveTimer = null;
     if(window._saveToCloud) window._saveToCloud();
-  }, 3000);
+  }, 2000);
 }
 
 function ct() { return state.trips.find(t=>t.id===state.currentTripId)||null; }
