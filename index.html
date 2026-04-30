@@ -718,7 +718,9 @@ function showPendingScreen(user, status) {
 function showMainApp(user, userData) {
   document.getElementById('authWrap').classList.add('hidden');
   document.getElementById('pendingWrap').classList.remove('show');
-  document.getElementById('app').classList.add('show');
+  const appEl = document.getElementById('app');
+  appEl.classList.add('show');
+  appEl.style.display = 'flex'; // Force show in case CSS class doesn't apply
 
   // Avatar
   const wrap = document.getElementById('userAvatarWrap');
@@ -763,8 +765,17 @@ function subscribeToData(uid) {
         window._localDirty = false;
         window._lastSyncTime = remoteTime;
         try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
-        loadTripForm();
-        updateSelector();
+
+        // Don't reload form if user is actively typing in an input field
+        const active = document.activeElement;
+        const userIsTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+        if (!userIsTyping) {
+          loadTripForm();
+          updateSelector();
+        } else {
+          // Just update selector silently
+          updateSelector();
+        }
         if(document.getElementById('screen-summary').classList.contains('active')) renderSummary();
         if(document.getElementById('screen-ops').classList.contains('active')) renderOps(currentFilter);
       }
