@@ -715,7 +715,7 @@ function showPendingScreen(user, status) {
   info.innerHTML = `<b>${user.displayName || 'Пользователь'}</b><br>${user.email}`;
 }
 
-function showMainApp(user, userData) {
+async function showMainApp(user, userData) {
   document.getElementById('authWrap').classList.add('hidden');
   document.getElementById('pendingWrap').classList.remove('show');
   const appEl = document.getElementById('app');
@@ -734,7 +734,7 @@ function showMainApp(user, userData) {
   window._currentUserData = userData;
   window._currentUser = user;
   startPeriodicSync();
-  initAppState();
+  await initAppState();
 }
 
 // ===== FIRESTORE REALTIME SYNC =====
@@ -742,77 +742,113 @@ function subscribeToData(uid) {
   if(unsubscribeData) unsubscribeData();
   setSyncStatus('syncing');
   const dataRef = doc(db, 'users', uid, 'appdata', 'main');
-  unsubscribeData = onSnapshot(dataRef, { includeMetadataChanges: true }, (snap) => {
-    // Ignore snapshots caused by our own writes
-    if (snap.metadata.hasPendingWrites) return;
 
-    if (snap.exists()) {
-      const remote = snap.data();
-      const remoteTime = remote.updatedAt?.seconds || 0;
-      const localTime = window._lastSyncTime || 0;
-      const hasNewerRemote = remoteTime > localTime;
-
-      if (hasNewerRemote || !window._localDirty) {
-        window.state = {
-          trips: remote.trips || [],
-          cats: remote.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
-          currentTripId: remote.currentTripId || null,
-          kadMode: remote.kadMode || 'half',
-          currencies: remote.currencies || null
-        };
-        if(!window.state.currentTripId && window.state.trips.length) {
-          const s = [...window.state.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0));
-          window.state.currentTripId = s[0].id;
-        }
-        window._localDirty = false;
-        window._lastSyncTime = remoteTime;
-        try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
-
-        // Don't reload form if user is actively typing
-        const active = document.activeElement;
-        const userIsTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
-        const hasPendingTimer = !!window._saveTimer;
-
-        if (!userIsTyping && !hasPendingTimer) {
-          loadTripForm();
-          updateSelector();
-        } else {
-          updateSelector();
-        }
-        if(document.getElementById('screen-summary').classList.contains('active')) renderSummary();
-        if(document.getElementById('screen-ops').classList.contains('active')) renderOps(currentFilter);
-      }
-    } else {
-      pushToFirestore();
+  unsubscribeData = onSnapshot(dataRef, { includeMetadataChanges: false }, (snap) => {
+    if (snap.metadata.hasPendingWrites) {
+      setSyncStatus('syncing');
+      return;
     }
+
+    if (!snap.exists()) {
+      console.log('[SYNC] No remote doc, pushing local state');
+      if (window.state && (window.state.trips?.length || window.state.cats)) {
+        pushToFirestore();
+      }
+      setSyncStatus('ok');
+      return;
+    }
+
+    const remote = snap.data();
+    const remoteTime = remote.updatedAt?.seconds || 0;
+    const localTime = window._lastSyncTime || 0;
+
+    console.log('[SYNC] Remote update received:', {
+      remoteTime, localTime,
+      remoteTrips: remote.trips?.length || 0,
+      localTrips: window.state?.trips?.length || 0,
+      localDirty: window._localDirty
+    });
+
+    if (window._localDirty || window._saveTimer) {
+      console.log('[SYNC] Local changes pending, skipping remote update');
+      return;
+    }
+
+    const newState = {
+      trips: remote.trips || [],
+      cats: remote.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
+      currentTripId: remote.currentTripId || null,
+      kadMode: remote.kadMode || 'half',
+      currencies: remote.currencies || null
+    };
+
+    ['расходы','премия'].forEach(t=>{
+      if(!newState.cats[t]) newState.cats[t]=[...DEFAULT_CATS[t]];
+      if(!newState.cats[t].includes('Иное')) newState.cats[t].push('Иное');
+    });
+    if(!newState.cats.аванс) newState.cats.аванс=[...DEFAULT_CATS.аванс];
+
+    if(!newState.currentTripId && newState.trips.length) {
+      const s = [...newState.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0));
+      newState.currentTripId = s[0].id;
+    }
+
+    window.state = newState;
+    state = newState;
+    window._lastSyncTime = remoteTime;
+
+    try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
+
+    const active = document.activeElement;
+    const userIsTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+
+    if (!userIsTyping) {
+      loadTripForm();
+    }
+    updateSelector();
+
+    if(document.getElementById('screen-summary').classList.contains('active')) renderSummary();
+    if(document.getElementById('screen-ops').classList.contains('active')) renderOps(currentFilter);
+
     setSyncStatus('ok');
   }, (err) => {
-    console.error('Firestore error', err);
+    console.error('[SYNC] Firestore error', err);
     setSyncStatus('error');
+    showToast('Ошибка синхронизации: ' + err.message, 'error');
   });
 }
 
 window._saveToCloud = async function() {
-  if (!currentUser) return;
+  if (!currentUser) {
+    console.warn('[SYNC] No user, skipping save');
+    return;
+  }
+  if (!window.state || !window.state.trips) {
+    console.warn('[SYNC] Empty state, skipping save');
+    return;
+  }
   try {
     setSyncStatus('syncing');
     const dataRef = doc(db, 'users', currentUser.uid, 'appdata', 'main');
-    await setDoc(dataRef, {
-      trips: window.state.trips,
-      cats: window.state.cats,
-      currentTripId: window.state.currentTripId,
+    const payload = {
+      trips: window.state.trips || [],
+      cats: window.state.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
+      currentTripId: window.state.currentTripId || null,
       kadMode: window.state.kadMode || 'half',
       currencies: window.state.currencies || null,
-      updatedAt: serverTimestamp()
-    });
+      updatedAt: serverTimestamp(),
+      _device: navigator.userAgent.substring(0, 50)
+    };
+    console.log('[SYNC] Saving to cloud:', { trips: payload.trips.length });
+    await setDoc(dataRef, payload);
     window._localDirty = false;
-    // Record sync time (approximate, server time slightly ahead)
     window._lastSyncTime = Math.floor(Date.now() / 1000);
     setSyncStatus('ok');
+    console.log('[SYNC] Save OK');
   } catch(e) {
-    console.error('Save error', e);
+    console.error('[SYNC] Save error', e);
     setSyncStatus('error');
-    showToast('Ошибка сохранения', 'error');
+    showToast('Ошибка сохранения: ' + e.message, 'error');
   }
 };
 
@@ -1111,11 +1147,10 @@ let state = { trips:[], cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), currentTr
 window.state = state;
 window._localDirty = false;
 
-function initAppState() {
-  // Fast startup: load from localStorage cache first
+function loadFromCache() {
   try {
     const cached = localStorage.getItem('rtcache');
-    if (cached && !window._localDirty) {
+    if (cached) {
       const parsed = JSON.parse(cached);
       window.state = {
         trips: parsed.trips || [],
@@ -1124,13 +1159,56 @@ function initAppState() {
         kadMode: parsed.kadMode || 'half',
         currencies: parsed.currencies || null
       };
+      console.log('[INIT] Loaded from cache:', window.state.trips.length, 'trips');
+    } else {
+      window.state = { trips:[], cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), currentTripId:null };
     }
-  } catch(e){}
-  window.state = window.state || state;
+  } catch(e) {
+    window.state = { trips:[], cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), currentTripId:null };
+  }
+}
+
+async function initAppState() {
+  if (currentUser) {
+    try {
+      const dataRef = doc(db, 'users', currentUser.uid, 'appdata', 'main');
+      const snap = await getDoc(dataRef);
+      if (snap.exists()) {
+        const remote = snap.data();
+        window.state = {
+          trips: remote.trips || [],
+          cats: remote.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
+          currentTripId: remote.currentTripId || null,
+          kadMode: remote.kadMode || 'half',
+          currencies: remote.currencies || null
+        };
+        window._lastSyncTime = remote.updatedAt?.seconds || 0;
+        console.log('[INIT] Loaded from cloud:', window.state.trips.length, 'trips');
+      } else {
+        loadFromCache();
+      }
+    } catch(e) {
+      console.error('[INIT] Cloud load failed, using cache', e);
+      loadFromCache();
+    }
+  } else {
+    loadFromCache();
+  }
+
+  state = window.state;
   if(!state.cats) state.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
-  ['расходы','премия'].forEach(t=>{if(!state.cats[t])state.cats[t]=[...DEFAULT_CATS[t]];if(!state.cats[t].includes('Иное'))state.cats[t].push('Иное');});
+  ['расходы','премия'].forEach(t=>{
+    if(!state.cats[t]) state.cats[t]=[...DEFAULT_CATS[t]];
+    if(!state.cats[t].includes('Иное')) state.cats[t].push('Иное');
+  });
   if(!state.cats.аванс) state.cats.аванс=[...DEFAULT_CATS.аванс];
-  loadTripForm(); updateSelector();
+  if(!state.currentTripId && state.trips.length) {
+    const s = [...state.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0));
+    state.currentTripId = s[0].id;
+  }
+  window._localDirty = false;
+  loadTripForm();
+  updateSelector();
 }
 
 function save() {
