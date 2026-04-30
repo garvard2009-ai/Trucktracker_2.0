@@ -742,10 +742,12 @@ function subscribeToData(uid) {
   if(unsubscribeData) unsubscribeData();
   setSyncStatus('syncing');
   const dataRef = doc(db, 'users', uid, 'appdata', 'main');
-  unsubscribeData = onSnapshot(dataRef, (snap) => {
+  unsubscribeData = onSnapshot(dataRef, { includeMetadataChanges: true }, (snap) => {
+    // Ignore snapshots caused by our own writes
+    if (snap.metadata.hasPendingWrites) return;
+
     if (snap.exists()) {
       const remote = snap.data();
-      // Always apply remote data unless user has made local changes since last sync
       const remoteTime = remote.updatedAt?.seconds || 0;
       const localTime = window._lastSyncTime || 0;
       const hasNewerRemote = remoteTime > localTime;
@@ -766,14 +768,15 @@ function subscribeToData(uid) {
         window._lastSyncTime = remoteTime;
         try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
 
-        // Don't reload form if user is actively typing in an input field
+        // Don't reload form if user is actively typing
         const active = document.activeElement;
         const userIsTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
-        if (!userIsTyping) {
+        const hasPendingTimer = !!window._saveTimer;
+
+        if (!userIsTyping && !hasPendingTimer) {
           loadTripForm();
           updateSelector();
         } else {
-          // Just update selector silently
           updateSelector();
         }
         if(document.getElementById('screen-summary').classList.contains('active')) renderSummary();
@@ -1132,13 +1135,12 @@ function initAppState() {
 
 function save() {
   window._localDirty = true;
-  // Always save to localStorage immediately (fast, local)
   try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
-  // Debounce cloud save to avoid excessive writes
   if(window._saveTimer) clearTimeout(window._saveTimer);
   window._saveTimer = setTimeout(() => {
+    window._saveTimer = null;
     if(window._saveToCloud) window._saveToCloud();
-  }, 1500);
+  }, 3000);
 }
 
 function ct() { return state.trips.find(t=>t.id===state.currentTripId)||null; }
@@ -1338,7 +1340,7 @@ function scheduleAutosave(){
   if(autosaveTimer)clearTimeout(autosaveTimer);
   const st=document.getElementById('autosaveStatus');
   if(st){st.textContent='⏳ Сохранение...';st.style.color='var(--muted)';}
-  autosaveTimer=setTimeout(autoSaveTrip,800);
+  autosaveTimer=setTimeout(autoSaveTrip,1500);
 }
 
 // ===== MODALS =====
