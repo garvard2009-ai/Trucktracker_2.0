@@ -1,0 +1,2860 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1117">
+<title>РейсТрекер</title>
+<!-- PWA manifest — inline через blob, не требует отдельного файла -->
+<script>
+(function(){
+  const manifest = {
+    name: 'РейсТрекер',
+    short_name: 'РейсТрекер',
+    description: 'Учёт расходов и доходов для водителей',
+    start_url: './',
+    display: 'standalone',
+    background_color: '#0f1117',
+    theme_color: '#0f1117',
+    orientation: 'portrait',
+    icons: [
+      { src: 'icons/icon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+      { src: 'icons/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+    ]
+  };
+  try {
+    const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = url;
+    document.head.appendChild(link);
+  } catch(e) {
+    // fallback — просто линк на файл
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = 'manifest.json';
+    document.head.appendChild(link);
+  }
+})();
+</script>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<link rel="apple-touch-icon" href="icons/icon-192x192.png">
+<meta name="apple-mobile-web-app-title" content="РейсТрекер">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--card2:#222535;--accent:#f5a623;--green:#2ecc71;--red:#e74c3c;--blue:#3498db;--text:#f0f0f0;--muted:#7a7f99;--border:#2e3147;--input-bg:#12141e;--radius:14px;--radius-sm:8px}
+
+/* ===== СВЕТЛАЯ ТЕМА: "Чистый офис" ===== */
+[data-theme="light"]{
+  --bg:#f5f6fa;
+  --card:#ffffff;
+  --card2:#f0f2f7;
+  --accent:#d4901e;
+  --green:#27ae60;
+  --red:#e74c3c;
+  --blue:#2e86de;
+  --text:#1a1d27;
+  --muted:#6b7280;
+  --border:#e1e4ed;
+  --input-bg:#ffffff;
+}
+[data-theme="light"] .header{box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+[data-theme="light"] .nav{box-shadow:0 -1px 3px rgba(0,0,0,0.04)}
+[data-theme="light"] .summary-total{background:linear-gradient(135deg,#fff8e8,#fff3d6);border-color:#f5a623}
+[data-theme="light"] .field input,[data-theme="light"] .field select,[data-theme="light"] .field textarea,[data-theme="light"] .settings-input{box-shadow:inset 0 1px 2px rgba(0,0,0,0.03)}
+[data-theme="light"] .modal-overlay{background:rgba(40,45,60,0.55)}
+[data-theme="light"] .fab{box-shadow:0 4px 14px rgba(212,144,30,0.4)}
+[data-theme="light"] .pay-btn.active,[data-theme="light"] .filter-tab.active,[data-theme="light"] .kad-mode-opt.active{background:rgba(212,144,30,0.08)}
+[data-theme="light"] .field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")}
+[data-theme="light"] body{color-scheme:light}
+[data-theme="light"] .toast{box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+[data-theme="light"] #btnManualSave{background:linear-gradient(135deg,#4a90e2,#357abd)!important;color:#fff!important}
+
+/* Плавный переход при смене темы */
+body,.header,.card,.nav,.modal,.field input,.field select,.field textarea,.settings-input,.op-row,.trip-list-item,.summary-total,.stat-box,.group-card{transition:background-color 0.25s,border-color 0.25s,color 0.25s}
+
+/* Theme toggle UI */
+.theme-row{display:flex;gap:6px}
+.theme-btn{flex:1;padding:10px 6px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:4px}
+.theme-btn-icon{font-size:20px;line-height:1}
+.theme-btn.active{border-color:var(--accent);background:rgba(245,166,35,0.1);color:var(--accent)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);font-size:15px}
+
+/* ===== AUTH SCREENS ===== */
+#authWrap{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px}
+#authWrap.hidden{display:none}
+.auth-logo{font-family:'Bebas Neue',sans-serif;font-size:42px;letter-spacing:3px;color:var(--accent);margin-bottom:8px}
+.auth-sub{font-size:13px;color:var(--muted);margin-bottom:40px;text-align:center}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px 24px;width:100%;max-width:360px}
+.auth-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1px;color:var(--text);margin-bottom:20px;text-align:center}
+.google-btn{width:100%;padding:14px;border-radius:12px;border:1.5px solid var(--border);background:var(--card2);color:var(--text);font-family:'Nunito',sans-serif;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;transition:all 0.2s}
+.google-btn:hover{border-color:var(--accent);background:#1e2135}
+.google-btn:active{transform:scale(0.97)}
+.google-icon{width:20px;height:20px;flex-shrink:0}
+
+/* ===== PENDING SCREEN ===== */
+#pendingWrap{position:fixed;inset:0;background:var(--bg);z-index:999;display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center}
+#pendingWrap.show{display:flex}
+.pending-icon{font-size:64px;margin-bottom:20px}
+.pending-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px;color:var(--accent);margin-bottom:12px}
+.pending-text{font-size:14px;color:var(--muted);line-height:1.6;max-width:300px;margin-bottom:24px}
+.pending-user{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;font-size:13px;color:var(--text-dim);margin-bottom:24px;max-width:300px;width:100%}
+.btn-logout-small{background:transparent;border:1.5px solid var(--border);color:var(--muted);padding:10px 20px;border-radius:8px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ===== MAIN APP ===== */
+#app{flex-direction:column;height:100dvh;display:none}
+#app.show{display:flex}
+.header{background:var(--card);border-bottom:1px solid var(--border);padding:10px 14px 10px;flex-shrink:0}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.header-logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:var(--accent)}
+.header-right{display:flex;align-items:center;gap:8px}
+.user-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--border)}
+.user-avatar-placeholder{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#0f0f0f;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.header-new{background:var(--accent);color:#0f0f0f;border:none;border-radius:20px;padding:6px 14px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;cursor:pointer}
+.trip-selector{display:flex;align-items:center;gap:10px;background:var(--input-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;cursor:pointer}
+.trip-selector-info{flex:1;min-width:0}
+.trip-selector-name{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.trip-selector-date{font-size:11px;color:var(--muted);margin-top:1px}
+.content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:80px}
+.nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);display:flex;z-index:100}
+.nav-btn{flex:1;padding:10px 4px 14px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;background:none;border:none;color:var(--muted);font-family:'Nunito',sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;transition:color 0.2s}
+.nav-btn.active{color:var(--accent)}
+.nav-btn.locked{opacity:0.4;cursor:not-allowed}
+.nav-btn svg{width:21px;height:21px}
+.rates-hint{display:flex;align-items:flex-start;gap:7px;margin-top:10px;padding:9px 11px;border-radius:var(--radius-sm);background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);font-size:11px;color:var(--muted);line-height:1.5;transition:background 0.3s,border-color 0.3s}
+.rates-hint.unlocked{background:rgba(46,204,113,0.08);border-color:rgba(46,204,113,0.3);color:var(--green)}
+.rates-hint-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.screen{display:none;padding:16px}
+.screen.active{display:block}
+.card{background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:12px;border:1px solid var(--border)}
+.card-title{font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;color:var(--accent);margin-bottom:13px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;background:var(--input-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Nunito',sans-serif;font-size:15px;padding:10px 12px;appearance:none;outline:none;transition:border-color 0.2s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.field textarea{resize:none;min-height:65px}
+.field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7f99' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{width:100%;padding:13px;border-radius:var(--radius-sm);border:none;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:all 0.15s}
+.btn-primary{background:var(--accent);color:#0f0f0f}.btn-primary:active{background:#d4901e;transform:scale(0.98)}
+.btn-ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+.btn-danger{background:rgba(231,76,60,0.12);color:var(--red);border:1px solid rgba(231,76,60,0.3)}
+.btn-green{background:var(--green);color:#0f0f0f}
+.btn-sm{padding:7px 12px;font-size:13px;width:auto}
+.op-item{background:var(--card2);border-radius:var(--radius-sm);padding:11px 13px;margin-bottom:8px;border-left:3px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+.op-item.расходы{border-left-color:var(--red)}.op-item.аванс{border-left-color:var(--green)}.op-item.премия{border-left-color:var(--accent)}
+.summary-total{background:linear-gradient(135deg,#1e2235,#252840);border-radius:var(--radius);padding:18px;margin-bottom:12px;border:1px solid var(--border);text-align:center}
+.summary-total-label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px}
+.summary-total-val{font-family:'Bebas Neue',sans-serif;font-size:50px;letter-spacing:2px;line-height:1}
+.summary-total-val.pos{color:var(--green)}.summary-total-val.neg{color:var(--red)}
+.summary-total-cur{font-size:13px;color:var(--muted);margin-top:2px}
+.last-edit{font-size:11px;color:var(--muted);margin-top:7px;display:flex;align-items:center;justify-content:center;gap:5px}
+.edit-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat-box{background:var(--card);border-radius:var(--radius-sm);padding:11px;border:1px solid var(--border)}
+.stat-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:3px}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:21px;letter-spacing:0.5px}
+.stat-val.red{color:var(--red)}.stat-val.green{color:var(--green)}.stat-val.orange{color:var(--accent)}.stat-val.blue{color:var(--blue)}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.group-card{background:var(--card);border-radius:var(--radius-sm);padding:13px;margin-bottom:8px;border:1px solid var(--border)}
+.group-title{font-weight:800;font-size:13px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.group-row{padding:5px 0;border-bottom:1px solid var(--border);font-size:13px}.group-row:last-child{border-bottom:none}
+.group-row-head{display:flex;justify-content:space-between;align-items:center}
+.group-row-label{color:var(--muted)}.group-row-val{font-weight:700}
+.inoye-item{background:var(--card2);border-radius:6px;padding:6px 10px;margin-top:4px;font-size:12px;display:flex;justify-content:space-between;gap:8px}
+.inoye-note{color:var(--muted);flex:1}.inoye-sum{font-weight:700;flex-shrink:0;white-space:nowrap}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:600px;padding:18px 16px 28px;max-height:92dvh;overflow-y:auto;transform:translateY(40px);transition:transform 0.25s ease}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:var(--accent);margin-bottom:14px}
+.trip-list-item{background:var(--card2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;border:1.5px solid transparent;transition:border-color 0.15s}
+.trip-list-item.current{border-color:var(--accent)}.trip-list-item:active{background:#2a2d3e}
+.trip-list-info{flex:1;min-width:0}
+.trip-list-name{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trip-list-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.trip-list-total{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:0.5px;text-align:right;flex-shrink:0;line-height:1.2}
+.trip-list-total .cur{font-size:10px;color:var(--muted);display:block}
+.trip-list-total.pos{color:var(--green)}.trip-list-total.neg{color:var(--red)}.trip-list-total.zero{color:var(--muted)}
+.trip-list-del{background:none;border:none;color:var(--muted);font-size:18px;padding:4px 6px;cursor:pointer;flex-shrink:0}
+.alert{padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:10px;font-size:13px;font-weight:600}
+.alert-err{background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.3);color:var(--red)}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.pay-toggle{display:flex;gap:6px;margin-bottom:12px}
+.pay-btn{flex:1;padding:9px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all 0.15s;line-height:1.3}
+.pay-btn.active{border-color:var(--accent);background:rgba(245,166,35,0.1);color:var(--accent)}
+.filter-tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px}
+.filter-tab{padding:6px 13px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all 0.15s}
+.filter-tab.active{border-color:var(--accent);background:rgba(245,166,35,0.1);color:var(--accent)}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)}
+.req{color:var(--red);margin-left:2px}
+.days-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.3);color:var(--blue);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700}
+.empty{text-align:center;padding:36px 20px;color:var(--muted)}.empty-icon{font-size:44px;margin-bottom:10px}.empty-text{font-size:14px;line-height:1.5}
+.cat-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px}.cat-item:last-child{border-bottom:none}
+.cat-name{font-size:14px;font-weight:600;flex:1}
+.cat-locked{font-size:10px;color:var(--muted);background:rgba(122,127,153,0.15);padding:2px 8px;border-radius:10px}
+.cat-del{background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.3);color:var(--red);border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer}
+.settings-hint{font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.settings-input{flex:1;background:var(--input-bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;padding:9px 12px;outline:none;transition:border-color 0.2s}
+.settings-input:focus{border-color:var(--accent)}
+.pdf-notice{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.4}
+.ops-table-head{display:grid;grid-template-columns:72px 1fr 90px;gap:0;background:var(--card);border-radius:var(--radius-sm) var(--radius-sm) 0 0;border:1px solid var(--border);border-bottom:2px solid var(--border);padding:7px 10px;margin-bottom:0}
+.oth-date,.oth-cat,.oth-sum{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted)}
+.oth-sum{text-align:right}
+.op-row{display:grid;grid-template-columns:72px 1fr 90px;gap:0;background:var(--card2);border:1px solid var(--border);border-top:none;padding:0;cursor:pointer;transition:background 0.15s;position:relative}
+.op-row:last-child{border-radius:0 0 var(--radius-sm) var(--radius-sm)}
+.op-row:active{background:#2a2d3e}
+.op-row-stripe{width:3px;position:absolute;left:0;top:0;bottom:0;border-radius:2px 0 0 2px}
+.op-row-stripe.расходы{background:var(--red)}.op-row-stripe.аванс{background:var(--green)}.op-row-stripe.премия{background:var(--accent)}
+.op-cell-date{padding:8px 10px 2px 13px;font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;border-right:1px solid var(--border)}
+.op-cell-cat{padding:8px 4px 2px 10px;font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op-cell-sum{padding:8px 10px 2px 4px;font-size:13px;font-weight:800;text-align:right;white-space:nowrap}
+.op-cell-sum.расходы{color:var(--red)}.op-cell-sum.аванс{color:var(--green)}.op-cell-sum.премия{color:var(--accent)}
+.op-row-bottom{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:1px 10px 7px 13px;gap:6px}
+.op-row-type{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;opacity:0.55}
+.op-row-note{font-size:11px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op-row-eur{font-size:10px;color:var(--muted);white-space:nowrap}
+.op-row-arrow{font-size:12px;color:var(--muted);flex-shrink:0}
+.fab{position:fixed;bottom:90px;right:18px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#0f0f0f;font-size:28px;font-weight:400;border:none;cursor:pointer;z-index:90;box-shadow:0 4px 16px rgba(245,166,35,0.45);display:flex;align-items:center;justify-content:center;line-height:1;transition:transform 0.15s,box-shadow 0.15s}
+.fab:active{transform:scale(0.93);box-shadow:0 2px 8px rgba(245,166,35,0.3)}
+.kad-mode-opt{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);margin-bottom:8px;cursor:pointer;transition:border-color 0.15s,background 0.15s;background:var(--input-bg)}
+.kad-mode-opt.active{border-color:var(--accent);background:rgba(245,166,35,0.07)}
+.kad-mode-radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;margin-top:2px;transition:all 0.15s;position:relative}
+.kad-mode-opt.active .kad-mode-radio{border-color:var(--accent)}
+.kad-mode-opt.active .kad-mode-radio::after{content:'';position:absolute;width:8px;height:8px;background:var(--accent);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%)}
+.kad-mode-title{font-weight:800;font-size:14px;margin-bottom:3px}
+.kad-mode-desc{font-size:11px;color:var(--muted);line-height:1.5}
+.kad-formula{font-size:12px;color:var(--accent);background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:6px;padding:7px 10px;margin-top:-4px;margin-bottom:10px;line-height:1.5}
+.status-toggle{display:flex;gap:6px}
+.status-btn{flex:1;padding:9px 4px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all 0.15s;line-height:1.3}
+.status-btn.active[data-status="active"]{border-color:#f5a623;background:rgba(245,166,35,0.12);color:#f5a623}
+.status-btn.active[data-status="ready"]{border-color:#3498db;background:rgba(52,152,219,0.12);color:#3498db}
+.status-btn.active[data-status="closed"]{border-color:#2ecc71;background:rgba(46,204,113,0.12);color:#2ecc71}
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap}
+.status-badge.active{background:rgba(245,166,35,0.15);color:#f5a623;border:1px solid rgba(245,166,35,0.3)}
+.status-badge.ready{background:rgba(52,152,219,0.15);color:#3498db;border:1px solid rgba(52,152,219,0.3)}
+.status-badge.closed{background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid rgba(46,204,113,0.3)}
+
+/* sync indicator */
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;margin-right:4px}
+.sync-dot.syncing{background:var(--accent);animation:pulse 1s infinite}
+.sync-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ===== ADMIN PANEL ===== */
+#adminWrap{position:fixed;inset:0;background:var(--bg);z-index:500;display:none;flex-direction:column}
+#adminWrap.show{display:flex}
+.admin-header{background:var(--card);border-bottom:1px solid var(--border);padding:16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.admin-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:var(--accent);flex:1}
+.admin-close{background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:4px}
+.admin-content{flex:1;overflow-y:auto;padding:16px}
+.driver-card{background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:10px;border:1px solid var(--border)}
+.driver-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.driver-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--border)}
+.driver-avatar-ph{width:44px;height:44px;border-radius:50%;background:var(--accent);color:#0f0f0f;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.driver-info{flex:1;min-width:0}
+.driver-name{font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.driver-email{font-size:12px;color:var(--muted);margin-top:2px}
+.driver-meta{font-size:11px;color:var(--muted);margin-top:3px}
+.access-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800}
+.access-badge.approved{background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)}
+.access-badge.pending{background:rgba(245,166,35,0.15);color:var(--accent);border:1px solid rgba(245,166,35,0.3)}
+.access-badge.blocked{background:rgba(231,76,60,0.15);color:var(--red);border:1px solid rgba(231,76,60,0.3)}
+.driver-actions{display:flex;gap:8px;flex-wrap:wrap}
+.driver-btn{padding:8px 14px;border-radius:8px;border:none;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s}
+.driver-btn-approve{background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)}
+.driver-btn-block{background:rgba(231,76,60,0.12);color:var(--red);border:1px solid rgba(231,76,60,0.3)}
+.driver-btn-unblock{background:rgba(52,152,219,0.12);color:var(--blue);border:1px solid rgba(52,152,219,0.3)}
+.driver-btn-detail{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.driver-stat{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.ds-box{background:var(--input-bg);border-radius:8px;padding:8px 12px;text-align:center;flex:1;min-width:70px}
+.ds-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+.ds-val{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:0.5px;margin-top:1px}
+.admin-tabs{display:flex;gap:8px;margin-bottom:16px}
+.admin-tab{flex:1;padding:10px 8px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all 0.15s}
+.admin-tab.active{border-color:var(--accent);background:rgba(245,166,35,0.1);color:var(--accent)}
+.admin-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.admin-stat-box{background:var(--card);border-radius:var(--radius-sm);padding:14px;border:1px solid var(--border);text-align:center}
+.admin-stat-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px}
+.admin-stat-val{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:12px 20px;border-radius:10px;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;font-size:13px;font-weight:700;white-space:nowrap;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+.toast.info{border-color:var(--blue);color:var(--blue)}
+
+/* Loading spinner */
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== АДМИН: ПРОСМОТР ЧУЖОГО РЕЙСА ===== */
+.av-section{margin-bottom:14px}
+.av-section-title{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid var(--border)}
+.av-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);gap:10px;font-size:13px}
+.av-row:last-child{border-bottom:none}
+.av-label{color:var(--muted);flex-shrink:0}
+.av-value{color:var(--text);font-weight:700;text-align:right;word-break:break-word}
+.av-total{background:linear-gradient(135deg,rgba(245,166,35,0.18),rgba(245,166,35,0.08));border:2px solid var(--accent);border-radius:var(--radius);padding:14px;text-align:center;margin-bottom:12px}
+.av-total-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.av-total-value{font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:1px;line-height:1}
+.av-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+.av-stat{background:var(--card2);border-radius:var(--radius-sm);padding:8px 6px;text-align:center}
+.av-stat-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;font-weight:800}
+.av-stat-value{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:0.5px}
+.av-op{background:var(--card2);border-radius:var(--radius-sm);padding:9px 11px;border-left:3px solid var(--muted);font-size:13px;margin-bottom:6px}
+.av-op.расходы{border-left-color:var(--red)}
+.av-op.аванс{border-left-color:var(--green)}
+.av-op.премия{border-left-color:var(--accent)}
+.av-op-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.av-op-cat{font-weight:700;color:var(--text);font-size:13px}
+.av-op-sum{font-weight:800;font-size:13px}
+.av-op-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ===== AUTH ===== -->
+<div id="authWrap">
+  <div class="auth-logo">🚛 РейсТрекер</div>
+  <div class="auth-sub">Учёт рейсов для водителей</div>
+  <div class="auth-card">
+    <div class="auth-title">Войти в систему</div>
+    <button class="google-btn" onclick="signInWithGoogle()">
+      <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Войти через Google
+    </button>
+    <div id="authError" style="margin-top:12px;font-size:12px;color:var(--red);text-align:center;display:none"></div>
+  </div>
+</div>
+
+<!-- ===== PENDING APPROVAL ===== -->
+<div id="pendingWrap">
+  <div class="pending-icon">⏳</div>
+  <div class="pending-title">Ожидание доступа</div>
+  <div class="pending-text">Ваш аккаунт зарегистрирован. Администратор должен одобрить ваш доступ.</div>
+  <div class="pending-user" id="pendingUserInfo"></div>
+  <button class="btn-logout-small" onclick="signOut()">Выйти из аккаунта</button>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app">
+  <div class="header">
+    <div class="header-top">
+      <div class="header-logo">🚛 РейсТрекер</div>
+      <div class="header-right">
+        <span id="syncIndicator" style="font-size:11px;color:var(--muted)"><span class="sync-dot" id="syncDot"></span><span id="syncText">синхр.</span></span>
+        <div id="userAvatarWrap" onclick="showUserMenu()" style="cursor:pointer"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="trip-selector" onclick="openTripsModal()" style="flex:1">
+        <span style="font-size:18px">🗂</span>
+        <div class="trip-selector-info">
+          <div class="trip-selector-name" id="selectorName">Нет рейса</div>
+          <div class="trip-selector-date" id="selectorDate">Нажмите для выбора рейса</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16" style="color:var(--muted);flex-shrink:0"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <button class="header-new" onclick="createNewTrip()">+ Новый</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- TRIP SCREEN -->
+    <div class="screen active" id="screen-trip">
+      <div id="noTripBanner" class="empty" style="display:none">
+        <div class="empty-icon">🚛</div>
+        <div class="empty-text">Нет ни одного рейса.<br>Нажмите «+ Новый» вверху.</div>
+      </div>
+      <div id="tripFormWrap">
+        <div class="card">
+          <div class="card-title">📅 Данные рейса</div>
+          <div class="field"><label>Название рейса <span class="req">*</span></label><input type="text" id="tripName" placeholder="Напр: Варшава — Берлин"/></div>
+          <div class="field">
+            <label>Статус рейса</label>
+            <div class="status-toggle" id="statusToggle">
+              <button class="status-btn" data-status="active" onclick="setStatus('active')">🟡 В работе</button>
+              <button class="status-btn" data-status="ready" onclick="setStatus('ready')">🔵 К сдаче</button>
+              <button class="status-btn" data-status="closed" onclick="setStatus('closed')">🟢 Закрыт</button>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Дата начала <span class="req">*</span></label><input type="date" id="dateStart"/></div>
+            <div class="field"><label>Время начала</label><input type="time" id="timeStart"/></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Дата конца</label><input type="date" id="dateEnd"/></div>
+            <div class="field"><label>Время конца</label><input type="time" id="timeEnd"/></div>
+          </div>
+          <div id="daysInfo" style="margin-bottom:12px;display:none">
+            <span class="days-badge">📅 <span id="daysCount">0</span> дн.</span>
+            &nbsp;<span class="days-badge" style="background:rgba(245,166,35,0.1);border-color:rgba(245,166,35,0.3);color:var(--accent)">⏱ <span id="tripDuration">—</span></span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">💰 Тип оплаты</div>
+          <div class="pay-toggle">
+            <button class="pay-btn active" id="payTypeStavka" onclick="setPayType('stavka')">Ставка<br>за рейс</button>
+            <button class="pay-btn" id="payTypeKad" onclick="setPayType('kadencia')">Каденция<br>(сут × ставка)</button>
+          </div>
+          <div id="stavkaFields">
+            <div class="field"><label>Ставка за рейс (EUR)</label><input type="text" id="stavkaEUR" placeholder="0" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"/></div>
+          </div>
+          <div id="kadenciaFields" style="display:none">
+            <div class="field"><label>Суточные (EUR/день)</label><input type="text" id="dailyRate" placeholder="0" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" oninput="updateKadFormula()"/></div>
+            <div id="kadFormulaBox" class="kad-formula" style="display:none"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">💱 Курсы валют</div>
+          <div class="field-row">
+            <div class="field"><label id="labelCur2">EUR/PLN</label><input type="text" id="rateEURPLN" placeholder="4.25" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"/></div>
+            <div class="field"><label id="labelCur3">EUR/BYN</label><input type="text" id="rateEURBYN" placeholder="3.20" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"/></div>
+          </div>
+          <div class="rates-hint" id="ratesHint">
+            <span class="rates-hint-icon">🔒</span>
+            <span id="ratesHintText">Заполните оба курса — вкладка <b>Операции</b> разблокируется автоматически. Суммы в PLN и BYN будут пересчитываться в EUR в реальном времени при изменении курсов.</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">📋 Задолженность & Инфо</div>
+          <div class="field">
+            <label>Остаток задолженности из прошлых рейсов (EUR)</label>
+            <input type="text" id="prevDebt" placeholder="0" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"/>
+          </div>
+          <div class="field"><label>Доп. информация</label><textarea id="tripNote" placeholder="Маршрут, груз, заметки..."></textarea></div>
+        </div>
+        <div id="autosaveStatus" style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:8px;min-height:16px"></div>
+        <button class="btn btn-danger" onclick="deleteCurrentTrip()">🗑 Удалить этот рейс</button>
+
+        <!-- Кнопка ручного сохранения + индикатор -->
+        <div style="margin-top:20px; padding:16px; background:rgba(255,255,255,0.03); border-radius:12px; text-align:center;">
+          <button id="btnManualSave" type="button"
+            style="width:100%; padding:14px; font-size:16px; font-weight:600;
+                   background:linear-gradient(135deg,#4a90e2,#357abd); color:white;
+                   border:none; border-radius:10px; cursor:pointer;
+                   box-shadow:0 4px 12px rgba(74,144,226,0.3);
+                   transition:transform 0.1s, box-shadow 0.2s;">
+            💾 Сохранить рейс
+          </button>
+          <div id="saveStatus" style="margin-top:10px; font-size:13px; color:#8aa; min-height:18px;">
+            Загрузка...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OPS SCREEN -->
+    <div class="screen" id="screen-ops">
+      <div class="section-header">
+        <div class="section-title">Операции</div>
+        <div style="font-size:12px;color:var(--muted)" id="opsCount">0 записей</div>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all" onclick="filterOps('all',this)">Все</button>
+        <button class="filter-tab" onclick="filterOps('расходы',this)">Расходы</button>
+        <button class="filter-tab" onclick="filterOps('аванс',this)">Аванс</button>
+        <button class="filter-tab" onclick="filterOps('премия',this)">Премия</button>
+      </div>
+      <div class="ops-table-head">
+        <span class="oth-date">Дата</span>
+        <span class="oth-cat">Категория</span>
+        <span class="oth-sum">Сумма</span>
+      </div>
+      <div id="opsList"></div>
+    </div>
+    <button class="fab" id="fabAddOp" onclick="openAddOp()" style="display:none">+</button>
+
+    <!-- SUMMARY SCREEN -->
+    <div class="screen" id="screen-summary">
+      <div class="section-title" style="margin-bottom:12px">Сводный отчёт</div>
+      <div class="summary-total">
+        <div class="summary-total-label">Итого на руки</div>
+        <div class="summary-total-val" id="summaryTotal">0.00</div>
+        <div class="summary-total-cur">EUR</div>
+        <div style="margin-top:8px" id="summaryStatusBadge"></div>
+        <div class="last-edit" id="lastEditLine" style="display:none">
+          <span class="edit-dot"></span><span id="lastEditText"></span>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-label">Ставка / Каденция</div><div class="stat-val orange" id="statStavka">0.00</div><div class="stat-sub" id="statStavkaSub"></div></div>
+        <div class="stat-box"><div class="stat-label">Задолженность</div><div class="stat-val blue" id="statDebt">0.00</div><div class="stat-sub">EUR</div></div>
+        <div class="stat-box"><div class="stat-label">Расходы (возмещение)</div><div class="stat-val green" id="statExpenses">0.00</div><div class="stat-sub">EUR</div></div>
+        <div class="stat-box"><div class="stat-label">Аванс</div><div class="stat-val green" id="statAdvance">0.00</div><div class="stat-sub">EUR</div></div>
+        <div class="stat-box"><div class="stat-label">Премии</div><div class="stat-val orange" id="statBonus">0.00</div><div class="stat-sub">EUR</div></div>
+        <div class="stat-box"><div class="stat-label">Дней в рейсе</div><div class="stat-val blue" id="statDays">0</div><div class="stat-sub" id="statDaysSub">дней</div></div>
+      </div>
+      <div id="summaryGroups"></div>
+      <div class="divider"></div>
+      <button class="btn btn-green" onclick="generatePDF()" style="margin-bottom:8px">📄 Скачать PDF отчёт</button>
+      <div class="pdf-notice">PDF откроется в новой вкладке.</div>
+    </div>
+
+    <!-- SETTINGS SCREEN -->
+    <div class="screen" id="screen-settings">
+      <div class="section-title" style="margin-bottom:4px">Настройки</div>
+      <div class="settings-hint">Редактируйте списки категорий.</div>
+      <div class="card">
+        <div class="card-title">💸 Расходы</div>
+        <div id="catList-расходы"></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><input type="text" id="newCat-расходы" placeholder="Новая категория..." class="settings-input"/><button class="btn btn-primary btn-sm" onclick="addCat('расходы')">+ Добавить</button></div>
+      </div>
+      <div class="card">
+        <div class="card-title">💰 Аванс</div>
+        <div id="catList-аванс"></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><input type="text" id="newCat-аванс" placeholder="Новая категория..." class="settings-input"/><button class="btn btn-primary btn-sm" onclick="addCat('аванс')">+ Добавить</button></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎁 Премия</div>
+        <div id="catList-премия"></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><input type="text" id="newCat-премия" placeholder="Новая категория..." class="settings-input"/><button class="btn btn-primary btn-sm" onclick="addCat('премия')">+ Добавить</button></div>
+      </div>
+      <button class="btn btn-ghost" style="font-size:13px" onclick="resetCats()">↺ Сбросить категории</button>
+      <div style="height:12px"></div>
+      <div class="card">
+        <div class="card-title">💱 Названия валют</div>
+        <div style="margin-bottom:4px;font-size:11px;color:var(--muted);font-weight:700">Валюта 2</div>
+        <div style="display:grid;grid-template-columns:1fr 80px;gap:6px;margin-bottom:10px">
+          <input type="text" id="cur2Name" class="settings-input" placeholder="PLN" maxlength="6" oninput="saveCurSettings()"/>
+          <input type="text" id="cur2Symbol" class="settings-input" placeholder="zł" maxlength="4" oninput="saveCurSettings()" style="text-align:center"/>
+        </div>
+        <div style="margin-bottom:4px;font-size:11px;color:var(--muted);font-weight:700">Валюта 3</div>
+        <div style="display:grid;grid-template-columns:1fr 80px;gap:6px;margin-bottom:10px">
+          <input type="text" id="cur3Name" class="settings-input" placeholder="BYN" maxlength="6" oninput="saveCurSettings()"/>
+          <input type="text" id="cur3Symbol" class="settings-input" placeholder="р" maxlength="4" oninput="saveCurSettings()" style="text-align:center"/>
+        </div>
+        <div id="curSaveStatus" style="font-size:11px;color:var(--green);min-height:16px;text-align:center"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎨 Внешний вид</div>
+        <div class="settings-hint">Выберите тему оформления. «Авто» подстроится под настройки вашего телефона.</div>
+        <div class="theme-row">
+          <button class="theme-btn" data-theme-btn="light" onclick="setTheme('light')">
+            <span class="theme-btn-icon">☀️</span>
+            <span>Светлая</span>
+          </button>
+          <button class="theme-btn" data-theme-btn="dark" onclick="setTheme('dark')">
+            <span class="theme-btn-icon">🌙</span>
+            <span>Тёмная</span>
+          </button>
+          <button class="theme-btn" data-theme-btn="auto" onclick="setTheme('auto')">
+            <span class="theme-btn-icon">🖥</span>
+            <span>Авто</span>
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📐 Расчёт каденции</div>
+        <div class="kad-mode-opt" onclick="setKadMode('half')" id="kadmode-half"><div class="kad-mode-radio" id="kadradio-half"></div><div><div class="kad-mode-title">Полдня</div><div class="kad-mode-desc">Остаток &lt; 12ч → +0.5 дня. Остаток ≥ 12ч → +1 день.</div></div></div>
+        <div class="kad-mode-opt" onclick="setKadMode('full')" id="kadmode-full"><div class="kad-mode-radio" id="kadradio-full"></div><div><div class="kad-mode-title">Только полные дни</div><div class="kad-mode-desc">Неполный день не оплачивается.</div></div></div>
+        <div class="kad-mode-opt" onclick="setKadMode('fullplus')" id="kadmode-fullplus"><div class="kad-mode-radio" id="kadradio-fullplus"></div><div><div class="kad-mode-title">Полные дни + дни начала и конца</div><div class="kad-mode-desc">Дата начала и конца считаются как полные дни.</div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">💾 Резервное копирование</div>
+        <div class="settings-hint">Скачайте файл с данными — храните в надёжном месте (облако, почта, флешка). При сбое сможете восстановить всё одним кликом.</div>
+        <div class="field">
+          <label>Напоминать делать бэкап</label>
+          <select id="backupFreqSelect" onchange="onBackupFreqChange()">
+            <option value="never">🔕 Никогда</option>
+            <option value="daily">📅 Каждый день</option>
+            <option value="3days">📆 Раз в 3 дня</option>
+            <option value="weekly">🗓️ Раз в неделю</option>
+            <option value="2weeks">📋 Раз в 2 недели</option>
+            <option value="monthly">🗒️ Раз в месяц</option>
+          </select>
+        </div>
+        <div style="background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px">
+          <span style="color:var(--muted)">Последний бэкап:</span>
+          <span id="backupLastDate" style="color:var(--text);font-weight:700;margin-left:6px">никогда</span>
+        </div>
+        <button class="btn btn-primary" onclick="exportBackup()" style="margin-bottom:8px">💾 Скачать бэкап сейчас</button>
+        <button class="btn btn-ghost" onclick="importBackup()">📂 Восстановить из файла</button>
+      </div>
+      <div class="card" style="border-color:rgba(231,76,60,0.3)">
+        <div class="card-title" style="color:var(--red)">⚠️ Аккаунт</div>
+        <button class="btn btn-danger" onclick="signOut()">Выйти из аккаунта</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-btn active" id="nav-trip" onclick="showScreen('trip')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Рейс
+    </button>
+    <button class="nav-btn" id="nav-ops" onclick="showScreen('ops')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="10"/></svg>Операции
+    </button>
+    <button class="nav-btn" id="nav-summary" onclick="showScreen('summary')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Отчёт
+    </button>
+    <button class="nav-btn" id="nav-settings" onclick="showScreen('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Настройки
+    </button>
+  </nav>
+</div>
+
+<!-- ===== ADMIN PANEL ===== -->
+<div id="adminWrap">
+  <div class="admin-header">
+    <div class="admin-title">👑 Администратор</div>
+    <button class="admin-close" onclick="closeAdmin()">✕</button>
+  </div>
+  <div class="admin-content">
+    <div class="admin-tabs">
+      <button class="admin-tab active" id="atab-users" onclick="switchAdminTab('users')">👥 Водители</button>
+      <button class="admin-tab" id="atab-invite" onclick="switchAdminTab('invite')">✉️ Доступ</button>
+      <button class="admin-tab" id="atab-stats" onclick="switchAdminTab('stats')">📊 Статистика</button>
+    </div>
+
+    <div id="adminTabUsers">
+      <div id="adminUsersList"><div class="empty"><div class="spinner"></div></div></div>
+    </div>
+
+    <div id="adminTabInvite" style="display:none">
+      <div style="background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:12px;border:1px solid var(--border)">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;color:var(--accent);margin-bottom:8px">➕ Добавить доступ по Email</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Введите Google-почту водителя. Когда он войдёт через Google — сразу получит доступ без ожидания.</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="email" id="inviteEmail" placeholder="email@gmail.com" class="settings-input" style="flex:1"/>
+          <button class="btn btn-primary btn-sm" onclick="addInvite()">Добавить</button>
+        </div>
+        <div id="inviteStatus" style="font-size:12px;min-height:16px;text-align:center"></div>
+      </div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;color:var(--text);margin-bottom:8px">📋 Список разрешённых email</div>
+      <div id="inviteList"><div class="empty"><div class="spinner"></div></div></div>
+    </div>
+
+    <div id="adminTabStats" style="display:none">
+      <div class="admin-stat-grid" id="adminStatsGrid">
+        <div class="admin-stat-box"><div class="admin-stat-label">Всего водителей</div><div class="admin-stat-val" id="astatTotal">—</div></div>
+        <div class="admin-stat-box"><div class="admin-stat-label">Одобрено</div><div class="admin-stat-val" style="color:var(--green)" id="astatApproved">—</div></div>
+        <div class="admin-stat-box"><div class="admin-stat-label">Ожидают</div><div class="admin-stat-val" style="color:var(--accent)" id="astatPending">—</div></div>
+        <div class="admin-stat-box"><div class="admin-stat-label">Заблокировано</div><div class="admin-stat-val" style="color:var(--red)" id="astatBlocked">—</div></div>
+      </div>
+      <div id="adminDriversDetails"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal('modalOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Новая операция</div>
+    <div id="modalErr" class="alert alert-err" style="display:none"></div>
+    <div class="field"><label>Дата <span class="req">*</span></label><input type="date" id="opDate"/></div>
+    <div class="field"><label>Тип операции <span class="req">*</span></label>
+      <select id="opType" onchange="onTypeChange()">
+        <option value="">— выбрать —</option>
+        <option value="расходы">💸 Расходы</option>
+        <option value="аванс">💰 Аванс</option>
+        <option value="премия">🎁 Премия</option>
+      </select>
+    </div>
+    <div class="field"><label>Категория <span class="req">*</span></label><select id="opCat" onchange="onCatChange()"><option value="">— сначала тип —</option></select></div>
+    <div class="field" id="noteField"><label>Примечание <span id="noteReqMark" style="display:none"><span class="req">*</span></span></label><textarea id="opNote" placeholder="Любая заметка..."></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Сумма <span class="req">*</span></label><input type="text" id="opSum" placeholder="0.00" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"/></div>
+      <div class="field"><label>Валюта</label><select id="opCur"><option value="EUR">EUR €</option><option value="PLN">PLN zł</option><option value="BYN">BYN р</option></select></div>
+    </div>
+    <div id="convertedPreview" style="font-size:13px;color:var(--muted);margin-bottom:12px;display:none">≈ <span id="convertedVal" style="color:var(--accent);font-weight:700"></span> EUR</div>
+    <button class="btn btn-primary" onclick="saveOp()">✅ Добавить</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('modalOverlay')">Отмена</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tripsModal" onclick="if(event.target===this)closeModal('tripsModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Все рейсы</div>
+    <div id="tripsListContent"></div>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('tripsModal')">Закрыть</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="opActionModal" onclick="if(event.target===this)closeModal('opActionModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="opActionTitle">Операция</div>
+    <div id="opActionInfo" style="background:var(--card2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;opacity:0.6" id="opActionType"></div>
+      <div style="font-weight:700;font-size:16px;margin:3px 0" id="opActionCat"></div>
+      <div style="font-size:12px;color:var(--muted)" id="opActionNote"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <div style="font-size:11px;color:var(--muted)" id="opActionDate"></div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px" id="opActionSum"></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="editOpStart()" style="margin-bottom:8px">✏️ Редактировать</button>
+    <button class="btn btn-danger" onclick="deleteOpAction()">🗑 Удалить операцию</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('opActionModal')">Отмена</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="opEditModal" style="z-index:300" onclick="if(event.target===this)closeModal('opEditModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Редактировать операцию</div>
+    <div id="editOpErr" class="alert alert-err" style="display:none"></div>
+    <div class="field"><label>Дата <span class="req">*</span></label><input type="date" id="editOpDate"/></div>
+    <div class="field"><label>Тип операции</label>
+      <select id="editOpType" onchange="onEditTypeChange()">
+        <option value="расходы">💸 Расходы</option>
+        <option value="аванс">💰 Аванс</option>
+        <option value="премия">🎁 Премия</option>
+      </select>
+    </div>
+    <div class="field"><label>Категория</label><select id="editOpCat" onchange="onEditCatChange()"></select></div>
+    <div class="field"><label>Примечание <span id="editNoteReqMark" style="display:none"><span class="req">*</span></span></label><textarea id="editOpNote" placeholder="Любая заметка..."></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Сумма</label><input type="text" id="editOpSum" placeholder="0.00" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"/></div>
+      <div class="field"><label>Валюта</label><select id="editOpCur"><option value="EUR">EUR €</option><option value="PLN">PLN zł</option><option value="BYN">BYN р</option></select></div>
+    </div>
+    <div id="editConvertedPreview" style="font-size:13px;color:var(--muted);margin-bottom:12px;display:none">≈ <span id="editConvertedVal" style="color:var(--accent);font-weight:700"></span> EUR</div>
+    <button class="btn btn-primary" onclick="saveEditOp()">💾 Сохранить</button>
+    <div style="height:8px"></div>
+    <button class="btn btn-ghost" onclick="closeModal('opEditModal')">Отмена</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="userMenuModal" style="z-index:550" onclick="if(event.target===this)closeModal('userMenuModal')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="userMenuContent"></div>
+  </div>
+</div>
+
+<!-- АДМИН: ПРОСМОТР ОДНОГО РЕЙСА ВОДИТЕЛЯ -->
+<div class="modal-overlay" id="adminTripView" style="z-index:600" onclick="if(event.target===this)closeModal('adminTripView')">
+  <div class="modal" style="max-height:94dvh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div id="adminTripViewContent"></div>
+  </div>
+</div>
+
+<div id="toastEl" class="toast"></div>
+
+<!-- ===== FIREBASE ===== -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged, browserLocalPersistence, setPersistence }
+  from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection,
+  getDocs, onSnapshot, serverTimestamp, query, orderBy }
+  from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+
+// ============================================
+// 🛡️ ЛОКАЛЬНОЕ ЗЕРКАЛО (защита от потери данных)
+// ============================================
+const MIRROR_KEY = 'flightDiary_mirror';
+const MIRROR_VERSIONS_KEY = 'flightDiary_mirror_versions';
+const MAX_MIRROR_VERSIONS = 3;
+
+function saveMirror(data) {
+  try {
+    if (!data || typeof data !== 'object') return;
+
+    // Текущее зеркало
+    const snapshot = {
+      data: data,
+      savedAt: new Date().toISOString(),
+      version: Date.now()
+    };
+    localStorage.setItem(MIRROR_KEY, JSON.stringify(snapshot));
+
+    // История версий (последние 3)
+    let versions = [];
+    try {
+      versions = JSON.parse(localStorage.getItem(MIRROR_VERSIONS_KEY) || '[]');
+    } catch(e) { versions = []; }
+
+    versions.unshift(snapshot);
+    versions = versions.slice(0, MAX_MIRROR_VERSIONS);
+    localStorage.setItem(MIRROR_VERSIONS_KEY, JSON.stringify(versions));
+
+    console.log('🛡️ Зеркало обновлено:', new Date().toLocaleTimeString());
+  } catch(e) {
+    console.warn('⚠️ Ошибка сохранения зеркала:', e);
+    // Если переполнен localStorage — чистим старые версии
+    if (e.name === 'QuotaExceededError') {
+      try {
+        localStorage.removeItem(MIRROR_VERSIONS_KEY);
+        localStorage.setItem(MIRROR_KEY, JSON.stringify({data: data, savedAt: new Date().toISOString()}));
+      } catch(e2) {
+        console.error('❌ Не удалось сохранить даже после очистки:', e2);
+      }
+    }
+  }
+}
+
+function loadMirror() {
+  try {
+    const raw = localStorage.getItem(MIRROR_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) {
+    console.warn('⚠️ Ошибка чтения зеркала:', e);
+    return null;
+  }
+}
+
+function loadMirrorVersions() {
+  try {
+    return JSON.parse(localStorage.getItem(MIRROR_VERSIONS_KEY) || '[]');
+  } catch(e) {
+    return [];
+  }
+}
+
+function isDataEmpty(data) {
+  if (!data || typeof data !== 'object') return true;
+  const trips = data.trips || data.рейсы || [];
+  const operations = data.operations || data.операции || [];
+  return (Array.isArray(trips) ? trips.length === 0 : Object.keys(trips || {}).length === 0)
+      && (Array.isArray(operations) ? operations.length === 0 : Object.keys(operations || {}).length === 0);
+}
+
+async function checkAndRestoreFromMirror(cloudData, restoreCallback) {
+  const mirror = loadMirror();
+  if (!mirror || !mirror.data) return false;
+
+  if (isDataEmpty(cloudData) && !isDataEmpty(mirror.data)) {
+    const savedDate = new Date(mirror.savedAt).toLocaleString('ru-RU');
+    const confirmRestore = confirm(
+      `⚠️ ВНИМАНИЕ: Облачные данные пусты, но в локальном зеркале найдена резервная копия от ${savedDate}.\n\n` +
+      `Восстановить данные из зеркала?\n\n` +
+      `✅ ОК — восстановить\n` +
+      `❌ Отмена — оставить пусто (если вы намеренно очистили данные)`
+    );
+
+    if (confirmRestore) {
+      console.log('🔄 Восстанавливаем из зеркала...');
+      if (typeof restoreCallback === 'function') {
+        await restoreCallback(mirror.data);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+// ============================================
+// КОНЕЦ БЛОКА ЗЕРКАЛА
+// ============================================
+
+// =====================================================
+// 🔥 ВСТАВЬ СЮДА СВОИ ДАННЫЕ ИЗ FIREBASE CONSOLE
+// =====================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAzmSaZxMLEkC9J8bnkT4MVnhWJjvrNL9E",
+  authDomain: "trucktracker2-bbf9a.firebaseapp.com",
+  projectId: "trucktracker2-bbf9a",
+  storageBucket: "trucktracker2-bbf9a.firebasestorage.app",
+  messagingSenderId: "1098312404423",
+  appId: "1:1098312404423:web:9f140ee3f724edd2735de2"
+};
+// =====================================================
+// ID твоего аккаунта Google — он станет администратором
+// Войди в приложение, открой консоль браузера (F12)
+// и скопируй свой UID из лога "Current user UID:"
+// =====================================================
+const ADMIN_UID = "ECAk0tINcwg0HKQnlQVW7Dqfbdl2";
+// =====================================================
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Remember login between sessions
+setPersistence(auth, browserLocalPersistence).catch(e => console.warn('Persistence error:', e));
+
+let currentUser = null;
+let unsubscribeData = null;
+
+// Expose to global scope
+window._db = db;
+window._auth = auth;
+window._firestoreAPI = {
+  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, getDocs, onSnapshot, serverTimestamp, query, orderBy
+};
+window._ADMIN_UID = ADMIN_UID;
+
+// ===== AUTH =====
+window.signInWithGoogle = async () => {
+  try {
+    document.getElementById('authError').style.display = 'none';
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  } catch(e) {
+    document.getElementById('authError').textContent = 'Ошибка входа: ' + e.message;
+    document.getElementById('authError').style.display = '';
+  }
+};
+
+window.signOut = async () => {
+  if(unsubscribeData) { unsubscribeData(); unsubscribeData = null; }
+  if(_syncInterval) { clearInterval(_syncInterval); _syncInterval = null; }
+  if(window._saveTimer) { clearTimeout(window._saveTimer); window._saveTimer = null; }
+  if(window._retryTimer) { clearTimeout(window._retryTimer); window._retryTimer = null; }
+  // Сбрасываем state — следующий пользователь не увидит кэш
+  window.state = null;
+  window._localDirty = false;
+  window._lastSyncTime = 0;
+  window._lastSaveTime = null;
+  try { localStorage.removeItem('rtcache'); } catch(e){}
+  await fbSignOut(auth);
+};
+
+onAuthStateChanged(auth, async (user) => {
+  console.log('Current user UID:', user?.uid);
+  if (!user) {
+    showAuthScreen();
+    return;
+  }
+  currentUser = user;
+
+  const isAdmin = user.uid === ADMIN_UID;
+  const userRef = doc(db, 'users', user.uid);
+  const snap = await getDoc(userRef);
+
+  if (!snap.exists()) {
+    // Check if email is pre-invited
+    const emailKey = user.email.toLowerCase().replace(/\./g, '_');
+    const inviteSnap = await getDoc(doc(db, 'invites', emailKey));
+    const isInvited = inviteSnap.exists();
+
+    await setDoc(userRef, {
+      uid: user.uid,
+      email: user.email,
+      name: user.displayName || '',
+      photo: user.photoURL || '',
+      status: (isAdmin || isInvited) ? 'approved' : 'pending',
+      isAdmin: isAdmin,
+      createdAt: serverTimestamp(),
+      lastSeen: serverTimestamp()
+    });
+  } else {
+    // Always fix admin status in case it was wrong
+    const updates = { lastSeen: serverTimestamp(), name: user.displayName||'', photo: user.photoURL||'' };
+    if (isAdmin) { updates.status = 'approved'; updates.isAdmin = true; }
+    await updateDoc(userRef, updates);
+  }
+
+  const userData = (await getDoc(userRef)).data();
+
+  if (user.uid === ADMIN_UID || userData.status === 'approved') {
+    await showMainApp(user, userData);
+    subscribeToData(user.uid);
+  } else if (userData.status === 'blocked') {
+    showPendingScreen(user, 'blocked');
+  } else {
+    showPendingScreen(user, 'pending');
+  }
+});
+
+function showAuthScreen() {
+  document.getElementById('authWrap').classList.remove('hidden');
+  document.getElementById('pendingWrap').classList.remove('show');
+  document.getElementById('app').classList.remove('show');
+}
+
+function showPendingScreen(user, status) {
+  document.getElementById('authWrap').classList.add('hidden');
+  document.getElementById('pendingWrap').classList.add('show');
+  document.getElementById('app').classList.remove('show');
+  const info = document.getElementById('pendingUserInfo');
+  if (status === 'blocked') {
+    document.querySelector('#pendingWrap .pending-icon').textContent = '🚫';
+    document.querySelector('#pendingWrap .pending-title').textContent = 'Доступ заблокирован';
+    document.querySelector('#pendingWrap .pending-text').textContent = 'Ваш аккаунт заблокирован администратором.';
+  }
+  info.innerHTML = `<b>${user.displayName || 'Пользователь'}</b><br>${user.email}`;
+}
+
+async function showMainApp(user, userData) {
+  document.getElementById('authWrap').classList.add('hidden');
+  document.getElementById('pendingWrap').classList.remove('show');
+  const appEl = document.getElementById('app');
+  appEl.classList.add('show');
+  appEl.style.display = 'flex'; // Force show in case CSS class doesn't apply
+
+  // Avatar
+  const wrap = document.getElementById('userAvatarWrap');
+  if (user.photoURL) {
+    wrap.innerHTML = `<img class="user-avatar" src="${user.photoURL}" referrerpolicy="no-referrer">`;
+  } else {
+    const letter = (user.displayName || user.email || 'U')[0].toUpperCase();
+    wrap.innerHTML = `<div class="user-avatar-placeholder">${letter}</div>`;
+  }
+
+  window._currentUserData = userData;
+  window._currentUser = user;
+  startPeriodicSync();
+  await initAppState();
+  setTimeout(() => { if (window.checkBackupReminder) window.checkBackupReminder(); }, 3000);
+}
+
+// ===== FIRESTORE REALTIME SYNC =====
+function subscribeToData(uid) {
+  if(unsubscribeData) unsubscribeData();
+  setSyncStatus('syncing');
+  const dataRef = doc(db, 'users', uid, 'appdata', 'main');
+
+  unsubscribeData = onSnapshot(dataRef, { includeMetadataChanges: false }, async (snap) => {
+    if (snap.metadata.hasPendingWrites) {
+      setSyncStatus('syncing');
+      return;
+    }
+
+    if (!snap.exists()) {
+      console.log('[SYNC] No remote doc, pushing local state');
+      if (window.state && (window.state.trips?.length || window.state.cats)) {
+        pushToFirestore();
+      }
+      setSyncStatus('ok');
+      return;
+    }
+
+    const remote = snap.data();
+    const remoteTime = remote.updatedAt?.seconds || 0;
+    const localTime = window._lastSyncTime || 0;
+
+    console.log('[SYNC] Remote update received:', {
+      remoteTime, localTime,
+      remoteTrips: remote.trips?.length || 0,
+      localTrips: window.state?.trips?.length || 0,
+      localDirty: window._localDirty
+    });
+
+    if (window._localDirty || window._saveTimer) {
+      console.log('[SYNC] Local changes pending, skipping remote update');
+      return;
+    }
+
+    // Глубокое клонирование через JSON убирает все Timestamp и нестандартные объекты
+    function deepClone(obj) {
+      try { return JSON.parse(JSON.stringify(obj)); } catch(e) { return obj; }
+    }
+
+    const newState = {
+      trips: deepClone(remote.trips || []),
+      cats: deepClone(remote.cats || JSON.parse(JSON.stringify(DEFAULT_CATS))),
+      currentTripId: remote.currentTripId || null,
+      kadMode: remote.kadMode || 'half',
+      currencies: deepClone(remote.currencies) || null
+    };
+
+    // 🛡️ Проверяем зеркало если облако пришло пустым
+    const restored = await checkAndRestoreFromMirror(newState, async (mirrorData) => {
+      window.state = Object.assign({}, newState, {
+        trips: mirrorData.trips || [],
+        cats: mirrorData.cats || newState.cats,
+        currentTripId: mirrorData.currentTripId || null,
+        kadMode: mirrorData.kadMode || newState.kadMode,
+        currencies: mirrorData.currencies || newState.currencies
+      });
+      if (typeof state !== 'undefined') state = window.state;
+      await window._saveToCloud();
+    });
+    if (restored) return;
+
+    ['расходы','премия'].forEach(t=>{
+      if(!newState.cats[t]) newState.cats[t]=[...DEFAULT_CATS[t]];
+      if(!newState.cats[t].includes('Иное')) newState.cats[t].push('Иное');
+    });
+    if(!newState.cats.аванс) newState.cats.аванс=[...DEFAULT_CATS.аванс];
+
+    if(!newState.currentTripId && newState.trips.length) {
+      const s = [...newState.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0));
+      newState.currentTripId = s[0].id;
+    }
+
+    window.state = newState;
+    if (typeof state !== 'undefined') state = newState;
+    window._lastSyncTime = remoteTime;
+
+    try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
+
+    const active = document.activeElement;
+    const userIsTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT');
+
+    if (userIsTyping) {
+      console.log('[SYNC] User is typing, skipping form reload');
+      setSyncStatus('ok');
+      return;
+    }
+
+    window._initializing = true;
+    loadTripForm();
+    updateSelector();
+
+    if(document.getElementById('screen-summary').classList.contains('active')) renderSummary();
+    if(document.getElementById('screen-ops').classList.contains('active')) renderOps(currentFilter);
+
+    setTimeout(() => { window._initializing = false; }, 500);
+    setSyncStatus('ok');
+    console.log('[SYNC] ✅ Applied');
+  }, (err) => {
+    console.error('[SYNC] Firestore error', err);
+    setSyncStatus('error');
+    if (window.showToast) window.showToast('Ошибка синхронизации: ' + err.message, 'error');
+    else console.error('[SYNC] Error:', err.message);
+  });
+}
+
+window._saveToCloud = async function() {
+  if (!currentUser) {
+    console.warn('[SYNC] No user, skipping save');
+    return;
+  }
+  if (!window.state || !window.state.trips) {
+    console.warn('[SYNC] Empty state, skipping save');
+    return;
+  }
+  try {
+    setSyncStatus('syncing');
+    const dataRef = doc(db, 'users', currentUser.uid, 'appdata', 'main');
+
+    // JSON round-trip: гарантированно убирает undefined, NaN, Infinity,
+    // Timestamp-объекты, классы с прототипами — всё что Firestore не принимает
+    const clean = JSON.parse(JSON.stringify({
+      trips: window.state.trips || [],
+      cats: window.state.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
+      currentTripId: window.state.currentTripId || null,
+      kadMode: window.state.kadMode || 'half',
+      currencies: window.state.currencies || null
+    }));
+
+    const payload = {
+      ...clean,
+      updatedAt: serverTimestamp(),
+      _device: navigator.userAgent.substring(0, 50)
+    };
+    if (window.updateSaveStatus) window.updateSaveStatus('saving');
+    console.log('[SYNC] Saving to cloud:', { trips: payload.trips.length });
+    await setDoc(dataRef, payload);
+    window._localDirty = false;
+    window._lastSyncTime = Math.floor(Date.now() / 1000);
+    setSyncStatus('ok');
+    console.log('[SYNC] Save OK');
+    window._lastSaveTime = Date.now();
+    window._localDirty = false;
+    if (window.updateSaveStatus) window.updateSaveStatus('saved', window._lastSaveTime);
+    saveMirror(window.state);
+  } catch(e) {
+    console.error('[SYNC] Save error', e);
+    setSyncStatus('error');
+    if (window.updateSaveStatus) window.updateSaveStatus('error');
+    if (window.showToast) window.showToast('Ошибка сохранения: ' + e.message, 'error');
+    // _localDirty остаётся true — планируем ретрай через 30 сек
+    if (window._retryTimer) clearTimeout(window._retryTimer);
+    window._retryTimer = setTimeout(() => {
+      window._retryTimer = null;
+      if (window._localDirty && window._saveToCloud) {
+        console.log('[SYNC] Retry after error...');
+        window._saveToCloud();
+      }
+    }, 30000);
+  }
+};
+
+async function pushToFirestore() {
+  await window._saveToCloud();
+}
+
+// ===== PERIODIC SYNC (every 60 seconds) =====
+let _syncInterval = null;
+function startPeriodicSync() {
+  if (_syncInterval) clearInterval(_syncInterval);
+  _syncInterval = setInterval(() => {
+    if (window._localDirty && window._saveToCloud) {
+      window._saveToCloud();
+    }
+  }, 60000);
+}
+
+function setSyncStatus(status) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  if (!dot) return;
+  dot.className = 'sync-dot' + (status === 'syncing' ? ' syncing' : status === 'error' ? ' error' : '');
+  txt.textContent = status === 'syncing' ? 'синхр.' : status === 'error' ? 'ошибка' : 'сохр.';
+}
+
+// ===== ADMIN FUNCTIONS =====
+window.openAdmin = async () => {
+  document.getElementById('adminWrap').classList.add('show');
+  loadAdminUsers();
+};
+
+window.closeAdmin = () => {
+  document.getElementById('adminWrap').classList.remove('show');
+};
+
+window.switchAdminTab = (tab) => {
+  document.getElementById('adminTabUsers').style.display = tab === 'users' ? '' : 'none';
+  document.getElementById('adminTabInvite').style.display = tab === 'invite' ? '' : 'none';
+  document.getElementById('adminTabStats').style.display = tab === 'stats' ? '' : 'none';
+  document.getElementById('atab-users').classList.toggle('active', tab === 'users');
+  document.getElementById('atab-invite').classList.toggle('active', tab === 'invite');
+  document.getElementById('atab-stats').classList.toggle('active', tab === 'stats');
+  if (tab === 'stats') loadAdminStats();
+  if (tab === 'invite') loadInviteList();
+};
+
+async function loadAdminUsers() {
+  const list = document.getElementById('adminUsersList');
+  list.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    const users = [];
+    snap.forEach(d => users.push(d.data()));
+    users.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+
+    if (!users.length) { list.innerHTML = '<div class="empty"><div class="empty-text">Нет пользователей</div></div>'; return; }
+
+    list.innerHTML = users.map(u => {
+      const isAdmin = u.uid === ADMIN_UID;
+      const statusMap = { approved: ['approved','✅ Одобрен'], pending: ['pending','⏳ Ожидает'], blocked: ['blocked','🚫 Заблокирован'] };
+      const [sc, sl] = statusMap[u.status] || ['pending','⏳ Ожидает'];
+      const avatarHtml = u.photo
+        ? `<img class="driver-avatar" src="${u.photo}" referrerpolicy="no-referrer">`
+        : `<div class="driver-avatar-ph">${(u.name||u.email||'?')[0].toUpperCase()}</div>`;
+      const lastSeen = u.lastSeen?.seconds ? new Date(u.lastSeen.seconds*1000).toLocaleDateString('ru-RU') : '—';
+      const joined = u.createdAt?.seconds ? new Date(u.createdAt.seconds*1000).toLocaleDateString('ru-RU') : '—';
+
+      const actionBtns = isAdmin ? `<span style="font-size:12px;color:var(--accent);font-weight:700">👑 Администратор</span>` : `
+        ${u.status !== 'approved' ? `<button class="driver-btn driver-btn-approve" onclick="adminApprove('${u.uid}')">✅ Одобрить</button>` : ''}
+        ${u.status !== 'blocked' ? `<button class="driver-btn driver-btn-block" onclick="adminBlock('${u.uid}')">🚫 Заблокировать</button>` : `<button class="driver-btn driver-btn-unblock" onclick="adminUnblock('${u.uid}')">🔓 Разблокировать</button>`}
+        <button class="driver-btn driver-btn-detail" onclick="adminViewDetails('${u.uid}')">📋 Рейсы</button>
+      `;
+
+      return `<div class="driver-card">
+        <div class="driver-top">
+          ${avatarHtml}
+          <div class="driver-info">
+            <div class="driver-name">${u.name || 'Без имени'}</div>
+            <div class="driver-email">${u.email}</div>
+            <div class="driver-meta">Регистрация: ${joined} · Был: ${lastSeen}</div>
+          </div>
+          <span class="access-badge ${sc}">${sl}</span>
+        </div>
+        <div class="driver-actions">${actionBtns}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="alert alert-err">Ошибка загрузки: ${e.message}</div>`;
+  }
+}
+
+async function loadAdminStats() {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    let total = 0, approved = 0, pending = 0, blocked = 0;
+    const details = [];
+    for (const d of snap.docs) {
+      const u = d.data();
+      total++;
+      if (u.status === 'approved' || u.uid === ADMIN_UID) approved++;
+      else if (u.status === 'blocked') blocked++;
+      else pending++;
+
+      // Load their trips
+      try {
+        const dataSnap = await getDoc(doc(db, 'users', u.uid, 'appdata', 'main'));
+        if (dataSnap.exists()) {
+          const data = dataSnap.data();
+          const trips = data.trips || [];
+          const totalEUR = trips.reduce((s,t) => s + calcSummaryFor(t).total, 0);
+          details.push({ u, trips: trips.length, totalEUR });
+        } else {
+          details.push({ u, trips: 0, totalEUR: 0 });
+        }
+      } catch(e) { details.push({ u, trips: 0, totalEUR: 0 }); }
+    }
+
+    document.getElementById('astatTotal').textContent = total;
+    document.getElementById('astatApproved').textContent = approved;
+    document.getElementById('astatPending').textContent = pending;
+    document.getElementById('astatBlocked').textContent = blocked;
+
+    const det = document.getElementById('adminDriversDetails');
+    det.innerHTML = '<div class="section-title" style="margin-bottom:12px;font-size:16px">Детали по водителям</div>' +
+      details.map(({u, trips, totalEUR}) => `
+        <div class="driver-card">
+          <div class="driver-top">
+            ${u.photo ? `<img class="driver-avatar" src="${u.photo}" referrerpolicy="no-referrer">` : `<div class="driver-avatar-ph">${(u.name||'?')[0].toUpperCase()}</div>`}
+            <div class="driver-info">
+              <div class="driver-name">${u.name || 'Без имени'}</div>
+              <div class="driver-email">${u.email}</div>
+            </div>
+          </div>
+          <div class="driver-stat">
+            <div class="ds-box"><div class="ds-label">Рейсов</div><div class="ds-val">${trips}</div></div>
+            <div class="ds-box"><div class="ds-label">Итого EUR</div><div class="ds-val" style="color:${totalEUR>=0?'var(--green)':'var(--red)'}">${totalEUR<0?'−':''}${fmt(Math.abs(totalEUR))}</div></div>
+          </div>
+        </div>
+      `).join('');
+  } catch(e) {
+    document.getElementById('adminDriversDetails').innerHTML = `<div class="alert alert-err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+window.adminApprove = async (uid) => {
+  await updateDoc(doc(db, 'users', uid), { status: 'approved' });
+  showToast('✅ Доступ одобрен', 'success');
+  loadAdminUsers();
+};
+
+window.adminBlock = async (uid) => {
+  if (!confirm('Заблокировать пользователя?')) return;
+  await updateDoc(doc(db, 'users', uid), { status: 'blocked' });
+  showToast('🚫 Заблокировано', 'success');
+  loadAdminUsers();
+};
+
+window.adminUnblock = async (uid) => {
+  await updateDoc(doc(db, 'users', uid), { status: 'approved' });
+  showToast('🔓 Доступ восстановлен', 'success');
+  loadAdminUsers();
+};
+
+// ===== INVITE BY EMAIL =====
+window.addInvite = async () => {
+  const emailInput = document.getElementById('inviteEmail');
+  const status = document.getElementById('inviteStatus');
+  const email = emailInput.value.trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    status.textContent = '⚠️ Введите корректный email';
+    status.style.color = 'var(--red)';
+    return;
+  }
+  try {
+    // Check if already in invites
+    const inviteRef = doc(db, 'invites', email.replace(/\./g, '_'));
+    const snap = await getDoc(inviteRef);
+    if (snap.exists()) {
+      status.textContent = '⚠️ Этот email уже добавлен';
+      status.style.color = 'var(--accent)';
+      return;
+    }
+    // Check if user already exists — approve directly
+    const usersSnap = await getDocs(collection(db, 'users'));
+    let foundUid = null;
+    usersSnap.forEach(d => { if (d.data().email === email) foundUid = d.id; });
+    if (foundUid) {
+      await updateDoc(doc(db, 'users', foundUid), { status: 'approved' });
+      showToast('✅ Пользователь уже есть — одобрен', 'success');
+    }
+    // Save invite
+    await setDoc(inviteRef, { email, addedAt: serverTimestamp(), addedBy: currentUser.uid });
+    emailInput.value = '';
+    status.textContent = '✅ Добавлено! Пользователь получит доступ при входе.';
+    status.style.color = 'var(--green)';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+    loadInviteList();
+  } catch(e) {
+    status.textContent = '❌ Ошибка: ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+};
+
+async function loadInviteList() {
+  const list = document.getElementById('inviteList');
+  list.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+  try {
+    const snap = await getDocs(collection(db, 'invites'));
+    if (!snap.docs.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0;text-align:center">Список пуст — добавьте email выше</div>';
+      return;
+    }
+    list.innerHTML = snap.docs.map(d => {
+      const inv = d.data();
+      const date = inv.addedAt?.seconds ? new Date(inv.addedAt.seconds*1000).toLocaleDateString('ru-RU') : '—';
+      return `<div style="background:var(--card2);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border)">
+        <div>
+          <div style="font-weight:700;font-size:14px">${inv.email}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Добавлен: ${date}</div>
+        </div>
+        <button class="cat-del" onclick="removeInvite('${d.id}','${inv.email}')">✕</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="alert alert-err">Ошибка: ${e.message}</div>`;
+  }
+}
+
+window.removeInvite = async (docId, email) => {
+  if (!confirm(`Убрать доступ для ${email}?`)) return;
+  await deleteDoc(doc(db, 'invites', docId));
+  showToast('Удалено', 'success');
+  loadInviteList();
+};
+
+window.adminViewDetails = async (uid) => {
+  try {
+    const dataSnap = await getDoc(doc(db, 'users', uid, 'appdata', 'main'));
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    const u = userSnap.data();
+    if (!dataSnap.exists()) { showToast('Нет данных', 'error'); return; }
+    const data = dataSnap.data();
+    const trips = data.trips || [];
+
+    // Сохраняем контекст водителя для дальнейшего просмотра
+    window._adminViewedDriver = {
+      uid: uid,
+      name: u.name || u.email,
+      email: u.email,
+      photo: u.photo || '',
+      trips: trips,
+      cats: data.cats || {},
+      currencies: data.currencies || null,
+      kadMode: data.kadMode || 'half'
+    };
+
+    const html = `
+      <div class="modal-title">📋 Рейсы водителя</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px;background:var(--card2);border-radius:var(--radius-sm)">
+        ${u.photo ? `<img class="driver-avatar" src="${u.photo}" referrerpolicy="no-referrer" style="width:36px;height:36px">` : `<div class="driver-avatar-ph" style="width:36px;height:36px;font-size:14px">${(u.name||'?')[0].toUpperCase()}</div>`}
+        <div>
+          <div style="font-weight:800;font-size:14px">${u.name || 'Без имени'}</div>
+          <div style="font-size:12px;color:var(--muted)">${u.email}</div>
+        </div>
+      </div>
+      ${trips.length === 0
+        ? '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">У водителя нет рейсов</div></div>'
+        : trips.map(t => {
+            const s = calcSummaryForTripWithCtx(t, window._adminViewedDriver);
+            const status = STATUS_MAP[t.trip?.status||'active'];
+            return `<div class="trip-list-item" onclick="openAdminTripView('${t.id}')" style="cursor:pointer">
+              <span style="font-size:22px">🚛</span>
+              <div class="trip-list-info">
+                <div class="trip-list-name">${t.trip?.tripName || 'Без названия'} <span class="status-badge ${status.cls}" style="font-size:10px;padding:1px 7px">${status.label}</span></div>
+                <div class="trip-list-meta">${fmtDate(t.trip?.dateStart)||'—'} — ${fmtDate(t.trip?.dateEnd)||'не завершён'} · ${t.ops?.length||0} оп.</div>
+              </div>
+              <div class="trip-list-total ${s.total>=0?'pos':'neg'}">${s.total<0?'−':''}${fmt(Math.abs(s.total))}<span class="cur">EUR</span></div>
+            </div>`;
+          }).join('')
+      }
+      <div style="height:8px"></div>
+      <button class="btn btn-ghost" onclick="closeModal('userMenuModal')">Закрыть</button>
+    `;
+    document.getElementById('userMenuContent').innerHTML = html;
+    document.getElementById('userMenuModal').classList.add('open');
+  } catch(e) { showToast('Ошибка: ' + e.message, 'error'); }
+};
+
+// ===== АДМИН: ПРОСМОТР ОДНОГО РЕЙСА =====
+function calcSummaryForTripWithCtx(tripObj, ctx){
+  const t=tripObj.trip||{},ops=tripObj.ops||[];
+  const dEx=calcDaysExact(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd);
+  const dDisp=calcDaysDisp(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd);
+  const debt=parseNum(t.prevDebt);
+
+  const driverKadMode = ctx?.kadMode || 'half';
+
+  function calcKadenciaForDriver(daysExact,daily,d1,t1,d2,t2,mode){
+    let pay,formula;
+    if(mode==='full'){
+      const whole=Math.floor(daysExact);pay=whole*daily;
+      formula=`${whole} × ${fmt(daily)} (только полные дни)`;
+    } else if(mode==='fullplus'){
+      const days=calcDaysFullPlus(d1,t1,d2,t2);pay=days*daily;
+      formula=`${days} × ${fmt(daily)} (вкл. дни начала/конца)`;
+    } else {
+      const whole=Math.floor(daysExact);const rem=daysExact-whole;
+      if(rem===0){pay=whole*daily;formula=`${whole} × ${fmt(daily)} EUR`;}
+      else if(rem<0.5){pay=whole*daily+daily/2;formula=`${whole} × ${fmt(daily)} + ${fmt(daily/2)} (полдня)`;}
+      else{pay=(whole+1)*daily;formula=`${whole+1} × ${fmt(daily)} (остаток ≥ 12ч → полный день)`;}
+    }
+    return {pay,formula};
+  }
+
+  let stavka=0,stavkaLabel='',stavkaFormula='';
+  if(t.payType==='stavka' || !t.payType){
+    stavka=parseNum(t.stavkaEUR);stavkaLabel=fmt(stavka)+' EUR';stavkaFormula='Ставка за рейс';
+  } else {
+    const daily=parseNum(t.dailyRate);
+    const k=calcKadenciaForDriver(dEx,daily,t.dateStart,t.timeStart,t.dateEnd,t.timeEnd,driverKadMode);
+    stavka=k.pay;stavkaLabel=fmt(stavka)+' EUR';stavkaFormula=k.formula;
+  }
+  const expenses=ops.filter(o=>o.type==='расходы').reduce((s,o)=>s+(o.eur||0),0);
+  const advance=ops.filter(o=>o.type==='аванс').reduce((s,o)=>s+(o.eur||0),0);
+  const bonus=ops.filter(o=>o.type==='премия').reduce((s,o)=>s+(o.eur||0),0);
+  const total=debt+stavka+bonus+expenses-advance;
+  return{dEx,dDisp,debt,stavka,stavkaLabel,stavkaFormula,expenses,advance,bonus,total,kadMode:driverKadMode};
+}
+window.calcSummaryForTripWithCtx = calcSummaryForTripWithCtx;
+
+window.openAdminTripView = function(tripId){
+  const ctx = window._adminViewedDriver;
+  if(!ctx){showToast('Контекст водителя потерян','error');return;}
+  const trip = ctx.trips.find(t=>t.id===tripId);
+  if(!trip){showToast('Рейс не найден','error');return;}
+
+  const t = trip.trip||{};
+  const ops = trip.ops||[];
+  const s = calcSummaryForTripWithCtx(trip, ctx);
+  const status = STATUS_MAP[t.status||'active'];
+  const dur = (t.dateStart && t.dateEnd) ? formatDur(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd) : '—';
+  const startDT = t.dateStart ? (fmtDate(t.dateStart) + (t.timeStart?' в '+t.timeStart:'')) : '—';
+  const endDT = t.dateEnd ? (fmtDate(t.dateEnd) + (t.timeEnd?' в '+t.timeEnd:'')) : '—';
+  const cur = ctx.currencies || {cur2:{name:'PLN',symbol:'zł'},cur3:{name:'BYN',symbol:'р'}};
+  const payTypeName = t.payType==='kadencia' ? 'Каденция' : 'Ставка за рейс';
+  const kadModeNames = {half:'Полдня',full:'Только полные дни',fullplus:'Полные + старт/конец'};
+
+  let payBlock = '';
+  if(t.payType === 'kadencia'){
+    payBlock = `
+      <div class="av-row"><span class="av-label">Тип оплаты</span><span class="av-value">${payTypeName}</span></div>
+      <div class="av-row"><span class="av-label">Суточные</span><span class="av-value">${fmt(parseNum(t.dailyRate))} EUR/день</span></div>
+      <div class="av-row"><span class="av-label">Режим расчёта</span><span class="av-value" style="font-size:11px">${kadModeNames[s.kadMode]}</span></div>
+      <div class="av-row"><span class="av-label">Сумма каденции</span><span class="av-value" style="color:var(--accent)">${s.stavkaLabel}</span></div>
+    `;
+  } else {
+    payBlock = `
+      <div class="av-row"><span class="av-label">Тип оплаты</span><span class="av-value">${payTypeName}</span></div>
+      <div class="av-row"><span class="av-label">Ставка</span><span class="av-value" style="color:var(--accent)">${fmt(parseNum(t.stavkaEUR))} EUR</span></div>
+    `;
+  }
+
+  const sortedOps = [...ops].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const opsHtml = sortedOps.length ? sortedOps.map(op => {
+    const sign = op.type==='расходы' ? '−' : '+';
+    const color = op.type==='расходы' ? 'var(--red)' : op.type==='аванс' ? 'var(--green)' : 'var(--accent)';
+    return `<div class="av-op ${op.type}">
+      <div class="av-op-top">
+        <span class="av-op-cat">${op.cat||'—'}</span>
+        <span class="av-op-sum" style="color:${color}">${sign}${fmt(op.sum)} ${op.cur}</span>
+      </div>
+      <div class="av-op-meta">
+        <span>${fmtDate(op.date)} · ${op.type}</span>
+        <span>${op.cur!=='EUR'?'≈ '+fmt(op.eur)+' EUR':''}</span>
+      </div>
+      ${op.note?`<div style="margin-top:3px;color:var(--muted);font-size:11px;font-style:italic">${op.note.replace(/</g,'&lt;')}</div>`:''}
+    </div>`;
+  }).join('') : '<div class="empty" style="padding:20px"><div class="empty-text">Операций нет</div></div>';
+
+  const html = `
+    <div class="modal-title">👁 Просмотр рейса</div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 10px;background:var(--card2);border-radius:var(--radius-sm);font-size:12px">
+      ${ctx.photo ? `<img src="${ctx.photo}" referrerpolicy="no-referrer" style="width:24px;height:24px;border-radius:50%">` : `<div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#0f0f0f;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">${ctx.name[0].toUpperCase()}</div>`}
+      <span style="color:var(--muted)">Водитель:</span>
+      <b style="color:var(--text)">${ctx.name}</b>
+    </div>
+
+    <div class="av-total">
+      <div class="av-total-label">Итого на руки</div>
+      <div class="av-total-value" style="color:${s.total>=0?'var(--green)':'var(--red)'}">
+        ${s.total<0?'−':''}${fmt(Math.abs(s.total))} EUR
+      </div>
+      <div style="margin-top:6px"><span class="status-badge ${status.cls}">${status.label}</span></div>
+    </div>
+
+    <div class="av-stat-grid">
+      <div class="av-stat"><div class="av-stat-label">${t.payType==='kadencia'?'Каденция':'Ставка'}</div><div class="av-stat-value" style="color:var(--accent)">${fmt(s.stavka)}</div></div>
+      <div class="av-stat"><div class="av-stat-label">Расходы</div><div class="av-stat-value" style="color:var(--red)">${fmt(s.expenses)}</div></div>
+      <div class="av-stat"><div class="av-stat-label">Аванс</div><div class="av-stat-value" style="color:var(--green)">${fmt(s.advance)}</div></div>
+      <div class="av-stat"><div class="av-stat-label">Премии</div><div class="av-stat-value" style="color:var(--accent)">${fmt(s.bonus)}</div></div>
+      <div class="av-stat"><div class="av-stat-label">Задолж.</div><div class="av-stat-value" style="color:var(--blue)">${fmt(s.debt)}</div></div>
+      <div class="av-stat"><div class="av-stat-label">Дней</div><div class="av-stat-value" style="color:var(--blue)">${s.dDisp}</div></div>
+    </div>
+
+    <div class="av-section">
+      <div class="av-section-title">📋 Исходные данные</div>
+      <div class="av-row"><span class="av-label">Название</span><span class="av-value">${t.tripName||'—'}</span></div>
+      <div class="av-row"><span class="av-label">Начало</span><span class="av-value">${startDT}</span></div>
+      <div class="av-row"><span class="av-label">Окончание</span><span class="av-value">${endDT}</span></div>
+      <div class="av-row"><span class="av-label">Длительность</span><span class="av-value">${dur}</span></div>
+    </div>
+
+    <div class="av-section">
+      <div class="av-section-title">💼 Условия оплаты</div>
+      ${payBlock}
+    </div>
+
+    <div class="av-section">
+      <div class="av-section-title">💱 Курсы валют и долг</div>
+      <div class="av-row"><span class="av-label">1 EUR в ${cur.cur2.name}</span><span class="av-value">${parseNum(t.rateEURPLN)?fmt(parseNum(t.rateEURPLN))+' '+cur.cur2.name:'—'}</span></div>
+      <div class="av-row"><span class="av-label">1 EUR в ${cur.cur3.name}</span><span class="av-value">${parseNum(t.rateEURBYN)?fmt(parseNum(t.rateEURBYN))+' '+cur.cur3.name:'—'}</span></div>
+      <div class="av-row"><span class="av-label">Задолженность</span><span class="av-value">${fmt(parseNum(t.prevDebt))} EUR</span></div>
+    </div>
+
+    ${t.tripNote?`
+      <div class="av-section">
+        <div class="av-section-title">📝 Примечание</div>
+        <div style="background:var(--card2);padding:10px;border-radius:var(--radius-sm);white-space:pre-wrap;font-size:13px;color:var(--text)">${t.tripNote.replace(/</g,'&lt;')}</div>
+      </div>
+    `:''}
+
+    <div class="av-section">
+      <div class="av-section-title">📊 Операции (${ops.length})</div>
+      ${opsHtml}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-green" onclick="adminGeneratePDF('${tripId}')" style="flex:1">📄 PDF</button>
+      <button class="btn btn-ghost" onclick="closeModal('adminTripView')" style="flex:1">Закрыть</button>
+    </div>
+  `;
+
+  document.getElementById('adminTripViewContent').innerHTML = html;
+  document.getElementById('adminTripView').classList.add('open');
+};
+
+// ===== АДМИН: PDF чужого рейса =====
+window.adminGeneratePDF = function(tripId){
+  const ctx = window._adminViewedDriver;
+  if(!ctx){showToast('Контекст потерян','error');return;}
+  const trip = ctx.trips.find(t=>t.id===tripId);
+  if(!trip){showToast('Рейс не найден','error');return;}
+
+  const t = trip.trip||{};
+  const s = calcSummaryForTripWithCtx(trip, ctx);
+  const today = new Date().toLocaleDateString('ru-RU');
+  const cur = ctx.currencies || {cur2:{name:'PLN',symbol:'zł'},cur3:{name:'BYN',symbol:'р'}};
+  const status = STATUS_MAP[t.status||'active'];
+  const kadModeNames = {half:'Полдня',full:'Только полные дни',fullplus:'Полные + старт/конец'};
+  const payTypeName = t.payType==='kadencia' ? 'Каденция' : 'Ставка за рейс';
+  const dur = (t.dateStart && t.dateEnd) ? formatDur(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd) : '—';
+
+  let payBlock = '';
+  if(t.payType === 'kadencia'){
+    payBlock =
+      `<tr><td>Тип оплаты</td><td><b>${payTypeName}</b></td></tr>` +
+      `<tr><td>Суточные</td><td>${fmt(parseNum(t.dailyRate))} EUR/день</td></tr>` +
+      `<tr><td>Режим расчёта</td><td>${kadModeNames[s.kadMode]}</td></tr>` +
+      `<tr><td>Сумма по каденции</td><td><b style="color:#c47d00">${s.stavkaLabel}</b> <span style="color:#888;font-size:11px">(${s.stavkaFormula})</span></td></tr>`;
+  } else {
+    payBlock =
+      `<tr><td>Тип оплаты</td><td><b>${payTypeName}</b></td></tr>` +
+      `<tr><td>Ставка за рейс</td><td><b style="color:#c47d00">${fmt(parseNum(t.stavkaEUR))} EUR</b></td></tr>`;
+  }
+
+  const sortedOps = [...(trip.ops||[])].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const opsRows = sortedOps.map(op => {
+    const sign = op.type==='расходы' ? '−' : '+';
+    const color = op.type==='расходы' ? '#e74c3c' : op.type==='аванс' ? '#27ae60' : '#c47d00';
+    return `<tr>
+      <td>${fmtDate(op.date)}</td>
+      <td>${op.cat||'—'}</td>
+      <td style="color:${color};font-weight:700">${sign}${fmt(op.sum)} ${op.cur}${op.cur!=='EUR'?` <span style="color:#888;font-size:10px">(≈${fmt(op.eur)} EUR)</span>`:''}</td>
+    </tr>${op.note?`<tr><td colspan="3" style="color:#888;font-size:11px;font-style:italic;padding-top:0">${op.note.replace(/</g,'&lt;')}</td></tr>`:''}`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    body{font-family:Arial,sans-serif;font-size:13px;color:#222;padding:20px;max-width:700px;margin:0 auto}
+    h1{font-size:20px;margin-bottom:4px}
+    .sub{color:#888;font-size:12px;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px}
+    td{padding:6px 8px;border-bottom:1px solid #eee;vertical-align:top}
+    tr:last-child td{border-bottom:none}
+    td:first-child{color:#666;width:45%}
+    .section-title{font-weight:800;font-size:11px;text-transform:uppercase;color:#c47d00;letter-spacing:0.6px;padding:6px 8px 4px;background:#fff8e8;border-bottom:2px solid #f5a623}
+    .total-box{background:#fff8e8;border:2px solid #f5a623;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+    .total-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px}
+    .total-value{font-size:28px;font-weight:900;color:${s.total>=0?'#27ae60':'#e74c3c'}}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${status.cls==='status-active'?'#fff3cd':status.cls==='status-done'?'#d4edda':'#f8d7da'};color:${status.cls==='status-active'?'#856404':status.cls==='status-done'?'#155724':'#721c24'}}
+    .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+    .stat-box{border:1px solid #eee;border-radius:6px;padding:8px;text-align:center}
+    .stat-lbl{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;font-weight:800}
+    .stat-val{font-size:20px;font-weight:900}
+    @media print{body{padding:0}}
+  </style>
+  </head><body>
+  <h1>🚛 ${t.tripName||'Рейс'}</h1>
+  <div class="sub">PDF сформирован: ${today} · Водитель: ${ctx.name}</div>
+
+  <div class="total-box">
+    <div><div class="total-label">Итого на руки</div><div class="total-value">${s.total<0?'−':''}${fmt(Math.abs(s.total))} EUR</div></div>
+    <div><span class="badge">${status.label}</span></div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-box"><div class="stat-lbl">${t.payType==='kadencia'?'Каденция':'Ставка'}</div><div class="stat-val" style="color:#c47d00">${fmt(s.stavka)}</div></div>
+    <div class="stat-box"><div class="stat-lbl">Расходы</div><div class="stat-val" style="color:#e74c3c">${fmt(s.expenses)}</div></div>
+    <div class="stat-box"><div class="stat-lbl">Аванс</div><div class="stat-val" style="color:#27ae60">${fmt(s.advance)}</div></div>
+    <div class="stat-box"><div class="stat-lbl">Премии</div><div class="stat-val" style="color:#c47d00">${fmt(s.bonus)}</div></div>
+    <div class="stat-box"><div class="stat-lbl">Задолж.</div><div class="stat-val" style="color:#3498db">${fmt(s.debt)}</div></div>
+    <div class="stat-box"><div class="stat-lbl">Дней</div><div class="stat-val" style="color:#3498db">${s.dDisp}</div></div>
+  </div>
+
+  <table>
+    <tr><td colspan="2" class="section-title">📋 Исходные данные</td></tr>
+    <tr><td>Название</td><td><b>${t.tripName||'—'}</b></td></tr>
+    <tr><td>Начало</td><td>${t.dateStart?fmtDate(t.dateStart)+(t.timeStart?' в '+t.timeStart:''):'—'}</td></tr>
+    <tr><td>Окончание</td><td>${t.dateEnd?fmtDate(t.dateEnd)+(t.timeEnd?' в '+t.timeEnd:''):'—'}</td></tr>
+    <tr><td>Длительность</td><td>${dur}</td></tr>
+  </table>
+
+  <table>
+    <tr><td colspan="2" class="section-title">💼 Условия оплаты</td></tr>
+    ${payBlock}
+  </table>
+
+  <table>
+    <tr><td colspan="2" class="section-title">💱 Курсы валют и долг</td></tr>
+    <tr><td>1 EUR в ${cur.cur2.name}</td><td>${parseNum(t.rateEURPLN)?fmt(parseNum(t.rateEURPLN))+' '+cur.cur2.name:'—'}</td></tr>
+    <tr><td>1 EUR в ${cur.cur3.name}</td><td>${parseNum(t.rateEURBYN)?fmt(parseNum(t.rateEURBYN))+' '+cur.cur3.name:'—'}</td></tr>
+    <tr><td>Задолженность с прошлых рейсов</td><td>${fmt(parseNum(t.prevDebt))} EUR</td></tr>
+  </table>
+
+  ${t.tripNote?`<table><tr><td class="section-title">📝 Примечание</td></tr><tr><td style="white-space:pre-wrap">${t.tripNote.replace(/</g,'&lt;')}</td></tr></table>`:''}
+
+  <table>
+    <tr><td colspan="3" class="section-title">📊 Операции (${(trip.ops||[]).length})</td></tr>
+    <tr style="background:#f5f5f5"><td><b>Дата</b></td><td><b>Категория</b></td><td><b>Сумма</b></td></tr>
+    ${opsRows || '<tr><td colspan="3" style="color:#888;font-style:italic">Операций нет</td></tr>'}
+  </table>
+  </body></html>`;
+
+  const w = window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);}
+  else{showToast('Разрешите всплывающие окна','error');}
+};
+
+window.showUserMenu = () => {
+  const u = window._currentUser;
+  const ud = window._currentUserData;
+  if (!u) return;
+  const isAdmin = u.uid === ADMIN_UID;
+  const html = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      ${u.photoURL ? `<img class="driver-avatar" src="${u.photoURL}" referrerpolicy="no-referrer">` : `<div class="driver-avatar-ph">${(u.displayName||'U')[0].toUpperCase()}</div>`}
+      <div>
+        <div style="font-weight:800;font-size:15px">${u.displayName || 'Пользователь'}</div>
+        <div style="font-size:12px;color:var(--muted)">${u.email}</div>
+        ${isAdmin ? '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-top:2px">👑 Администратор</div>' : ''}
+      </div>
+    </div>
+    ${isAdmin ? `<button class="btn btn-primary" onclick="closeModal('userMenuModal');openAdmin()" style="margin-bottom:8px">👑 Открыть панель администратора</button>` : ''}
+    <button class="btn btn-ghost" onclick="closeModal('userMenuModal')">Закрыть</button>
+  `;
+  document.getElementById('userMenuContent').innerHTML = html;
+  document.getElementById('userMenuModal').classList.add('open');
+};
+
+</script>
+
+<!-- ===== APP LOGIC ===== -->
+<script>
+// ============================================
+// 🎨 УПРАВЛЕНИЕ ТЕМОЙ
+// ============================================
+const THEME_KEY = 'rt_theme';
+
+function getThemePref(){
+  return localStorage.getItem(THEME_KEY) || 'auto';
+}
+
+function getEffectiveTheme(pref){
+  if(pref==='auto'){
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return pref;
+}
+
+function applyTheme(){
+  const pref = getThemePref();
+  const effective = getEffectiveTheme(pref);
+  if(effective === 'light'){
+    document.documentElement.setAttribute('data-theme','light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  // Обновляем цвет шапки браузера
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', effective==='light' ? '#ffffff' : '#0f1117');
+  // Обновляем UI кнопок (если они уже отрисованы)
+  document.querySelectorAll('[data-theme-btn]').forEach(b=>{
+    b.classList.toggle('active', b.dataset.themeBtn === pref);
+  });
+}
+
+window.setTheme = function(pref){
+  localStorage.setItem(THEME_KEY, pref);
+  applyTheme();
+  if(window.showToast){
+    const labels = {light:'☀️ Светлая тема', dark:'🌙 Тёмная тема', auto:'🖥 Авто (по системе)'};
+    window.showToast(labels[pref]||'Тема изменена', 'success');
+  }
+};
+
+// Применяем сразу при загрузке (до DOMContentLoaded — чтобы не было «мигания»)
+applyTheme();
+
+// Слушаем изменения системной темы (если режим "авто")
+if(window.matchMedia){
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    if(getThemePref() === 'auto') applyTheme();
+  });
+}
+// ============================================
+// КОНЕЦ БЛОКА ТЕМЫ
+// ============================================
+
+// ============================================
+// 💾 РЕЗЕРВНОЕ КОПИРОВАНИЕ (экспорт/импорт)
+// ============================================
+const BACKUP_FREQ_KEY = 'rt_backupFreq';
+const BACKUP_LAST_KEY = 'rt_backupLast';
+const BACKUP_LAST_REMIND_KEY = 'rt_backupLastRemind';
+
+const BACKUP_FREQUENCIES = {
+  'never':   { label: '🔕 Никогда',         days: null },
+  'daily':   { label: '📅 Каждый день',     days: 1 },
+  '3days':   { label: '📆 Раз в 3 дня',     days: 3 },
+  'weekly':  { label: '🗓️ Раз в неделю',    days: 7 },
+  '2weeks':  { label: '📋 Раз в 2 недели',  days: 14 },
+  'monthly': { label: '🗒️ Раз в месяц',     days: 30 }
+};
+
+function getBackupFreq() {
+  return localStorage.getItem(BACKUP_FREQ_KEY) || 'weekly';
+}
+function setBackupFreq(freq) {
+  localStorage.setItem(BACKUP_FREQ_KEY, freq);
+}
+function getLastBackupDate() {
+  const ts = localStorage.getItem(BACKUP_LAST_KEY);
+  return ts ? new Date(parseInt(ts)) : null;
+}
+function setLastBackupDate(date) {
+  localStorage.setItem(BACKUP_LAST_KEY, (date || new Date()).getTime().toString());
+}
+function formatBackupDate(date) {
+  if (!date) return 'никогда';
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+  const dateStr = date.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  if (diffDays === 0) return `сегодня (${dateStr})`;
+  if (diffDays === 1) return `вчера (${dateStr})`;
+  if (diffDays < 7) return `${diffDays} дн. назад (${dateStr})`;
+  return dateStr;
+}
+
+// ----- ЭКСПОРТ -----
+function exportBackup(silent = false) {
+  try {
+    if (!window.state) {
+      if (!silent) showToast('❌ Нет данных для экспорта', 'error');
+      return false;
+    }
+    const user = window._currentUser;
+    const backupData = {
+      _meta: {
+        app: 'РейсТрекер',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        userEmail: user?.email || '',
+        userName: user?.displayName || ''
+      },
+      state: {
+        trips: window.state.trips || [],
+        cats: window.state.cats || {},
+        currentTripId: window.state.currentTripId || null,
+        kadMode: window.state.kadMode || 'half',
+        currencies: window.state.currencies || null
+      }
+    };
+    const json = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
+    const filename = `reystreker-backup_${stamp}.json`;
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setLastBackupDate(new Date());
+    if (!silent) showToast(`✅ Бэкап скачан (${(window.state.trips||[]).length} рейсов)`, 'success');
+    updateBackupUI();
+    return true;
+  } catch(e) {
+    console.error('❌ Ошибка экспорта:', e);
+    if (!silent) showToast('❌ Ошибка: ' + e.message, 'error');
+    return false;
+  }
+}
+window.exportBackup = exportBackup;
+
+// ----- ИМПОРТ -----
+function importBackup() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        const data = parsed.state || parsed.data || parsed;
+        if (!data || typeof data !== 'object') {
+          showToast('❌ Файл повреждён', 'error'); return;
+        }
+        const trips = data.trips || [];
+        const fCount = Array.isArray(trips) ? trips.length : 0;
+        let opsCount = 0;
+        if (Array.isArray(trips)) trips.forEach(t => { opsCount += (t.ops||[]).length; });
+        const exportedAt = parsed._meta?.exportedAt
+          ? new Date(parsed._meta.exportedAt).toLocaleString('ru-RU') : 'неизвестно';
+        const choice = prompt(
+          `📂 Импорт бэкапа\n\n` +
+          `Файл: ${file.name}\n` +
+          `Создан: ${exportedAt}\n` +
+          `Рейсов: ${fCount}\n` +
+          `Операций: ${opsCount}\n\n` +
+          `Выберите действие:\n` +
+          `1 — ЗАМЕНИТЬ все текущие данные\n` +
+          `2 — ОБЪЕДИНИТЬ с текущими\n` +
+          `(пусто/Отмена — отменить)`,
+          ''
+        );
+        if (choice === '1') {
+          if (!confirm('⚠️ ВНИМАНИЕ!\n\nВсе текущие рейсы и настройки будут ЗАМЕНЕНЫ данными из файла.\n\nПродолжить?')) return;
+          applyImport(data, 'replace');
+        } else if (choice === '2') {
+          applyImport(data, 'merge');
+        } else {
+          showToast('Импорт отменён', 'info');
+        }
+      } catch(err) {
+        console.error('❌ Импорт:', err);
+        showToast('❌ Не удалось прочитать: ' + err.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+window.importBackup = importBackup;
+
+function applyImport(data, mode) {
+  try {
+    if (mode === 'replace') {
+      window.state = {
+        trips: data.trips || [],
+        cats: data.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
+        currentTripId: data.currentTripId || null,
+        kadMode: data.kadMode || 'half',
+        currencies: data.currencies || null
+      };
+    } else {
+      // merge: добавляем рейсы по id (без дубликатов)
+      const existingIds = new Set((window.state.trips||[]).map(t => t.id));
+      const newTrips = (data.trips||[]).filter(t => !existingIds.has(t.id));
+      window.state.trips = [...(window.state.trips||[]), ...newTrips];
+      // объединяем категории
+      if (data.cats) {
+        Object.keys(data.cats).forEach(type => {
+          if (!window.state.cats[type]) window.state.cats[type] = [];
+          (data.cats[type]||[]).forEach(c => {
+            if (!window.state.cats[type].includes(c)) {
+              const iIdx = window.state.cats[type].indexOf('Иное');
+              if (iIdx >= 0) window.state.cats[type].splice(iIdx, 0, c);
+              else window.state.cats[type].push(c);
+            }
+          });
+        });
+      }
+      if (data.currencies && !window.state.currencies) window.state.currencies = data.currencies;
+    }
+    // Нормализация
+    if (!window.state.cats) window.state.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
+    ['расходы','премия'].forEach(t => {
+      if (!window.state.cats[t]) window.state.cats[t] = [...DEFAULT_CATS[t]];
+      if (!window.state.cats[t].includes('Иное')) window.state.cats[t].push('Иное');
+    });
+    if (!window.state.cats.аванс) window.state.cats.аванс = [...DEFAULT_CATS.аванс];
+
+    state = window.state;
+    save();
+    loadTripForm();
+    updateSelector();
+    if (document.getElementById('screen-settings').classList.contains('active')) renderSettings();
+    if (document.getElementById('screen-summary').classList.contains('active')) renderSummary();
+    if (document.getElementById('screen-ops').classList.contains('active')) renderOps(currentFilter);
+
+    const msg = mode === 'replace'
+      ? `✅ Импорт завершён: ${(window.state.trips||[]).length} рейсов`
+      : `✅ Объединено: всего ${(window.state.trips||[]).length} рейсов`;
+    showToast(msg, 'success');
+  } catch(e) {
+    console.error('❌ applyImport:', e);
+    showToast('❌ Ошибка применения: ' + e.message, 'error');
+  }
+}
+
+// ----- НАПОМИНАНИЕ -----
+function checkBackupReminder() {
+  const freq = getBackupFreq();
+  const cfg = BACKUP_FREQUENCIES[freq];
+  if (!cfg || !cfg.days) return;
+  const last = getLastBackupDate();
+  const lastRemindTs = parseInt(localStorage.getItem(BACKUP_LAST_REMIND_KEY) || '0');
+  const now = Date.now();
+  if (now - lastRemindTs < 24 * 60 * 60 * 1000) return;
+  let needRemind = false;
+  if (!last) needRemind = true;
+  else if ((now - last.getTime()) / (1000*60*60*24) >= cfg.days) needRemind = true;
+  if (needRemind) {
+    localStorage.setItem(BACKUP_LAST_REMIND_KEY, now.toString());
+    setTimeout(showBackupReminderToast, 2000);
+  }
+}
+window.checkBackupReminder = checkBackupReminder;
+
+function showBackupReminderToast() {
+  const old = document.getElementById('backupReminderToast');
+  if (old) old.remove();
+  const toast = document.createElement('div');
+  toast.id = 'backupReminderToast';
+  toast.style.cssText = `
+    position:fixed; bottom:100px; left:50%; transform:translateX(-50%);
+    background:var(--card); border:1.5px solid var(--accent); color:var(--text);
+    padding:14px 16px; border-radius:14px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.5); z-index:9999;
+    display:flex; align-items:center; gap:12px; max-width:92vw; width:340px;
+    font-family:'Nunito',sans-serif; font-size:13px;
+  `;
+  const last = getLastBackupDate();
+  const lastTxt = last ? `Последний: ${formatBackupDate(last)}` : 'Бэкап ещё не делался';
+  toast.innerHTML = `
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:800;margin-bottom:3px;color:var(--accent)">💾 Пора сделать бэкап</div>
+      <div style="font-size:11px;color:var(--muted)">${lastTxt}</div>
+    </div>
+    <button id="brDl" style="background:var(--accent);color:#0f0f0f;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:800;font-size:12px;flex-shrink:0">Скачать</button>
+    <button id="brCl" style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:8px 10px;border-radius:8px;cursor:pointer;flex-shrink:0">✕</button>
+  `;
+  document.body.appendChild(toast);
+  document.getElementById('brDl').onclick = () => { exportBackup(); toast.remove(); };
+  document.getElementById('brCl').onclick = () => toast.remove();
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 20000);
+}
+
+// ----- UI обновление -----
+function updateBackupUI() {
+  const freqEl = document.getElementById('backupFreqSelect');
+  const lastEl = document.getElementById('backupLastDate');
+  if (freqEl) freqEl.value = getBackupFreq();
+  if (lastEl) lastEl.textContent = formatBackupDate(getLastBackupDate());
+}
+window.updateBackupUI = updateBackupUI;
+
+window.onBackupFreqChange = function() {
+  const freq = document.getElementById('backupFreqSelect').value;
+  setBackupFreq(freq);
+  showToast('✅ Частота напоминаний сохранена', 'success');
+};
+// ============================================
+// КОНЕЦ БЛОКА БЭКАПА
+// ============================================
+
+const DEFAULT_CATS = {расходы:['Парковка','Мобильный телефон','Пломба+дезинфекция','Перецеп BY','Эл. очередь','Печать документов','Иное'],аванс:['На карту','Наличные','Allegro'],премия:['ADR','Иное']};
+
+let state = { trips:[], cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), currentTripId:null };
+window.state = state;
+window._localDirty = false;
+
+function loadFromCache() {
+  try {
+    const cached = localStorage.getItem('rtcache');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      window.state = {
+        trips: parsed.trips || [],
+        cats: parsed.cats || JSON.parse(JSON.stringify(DEFAULT_CATS)),
+        currentTripId: parsed.currentTripId || null,
+        kadMode: parsed.kadMode || 'half',
+        currencies: parsed.currencies || null
+      };
+      console.log('[INIT] Loaded from cache:', window.state.trips.length, 'trips');
+    } else {
+      window.state = { trips:[], cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), currentTripId:null };
+    }
+  } catch(e) {
+    window.state = { trips:[], cats:JSON.parse(JSON.stringify(DEFAULT_CATS)), currentTripId:null };
+  }
+}
+
+async function initAppState() {
+  const user = window._currentUser;
+  const db = window._db;
+
+  if (user && db && window._firestoreAPI) {
+    try {
+      const { doc: docFn, getDoc: getDocFn } = window._firestoreAPI;
+      const dataRef = docFn(db, 'users', user.uid, 'appdata', 'main');
+      const snap = await getDocFn(dataRef);
+      if (snap.exists()) {
+        const remote = snap.data();
+        const deepClone = (o) => { try { return JSON.parse(JSON.stringify(o)); } catch(e) { return o; } };
+        window.state = {
+          trips: deepClone(remote.trips || []),
+          cats: deepClone(remote.cats || JSON.parse(JSON.stringify(DEFAULT_CATS))),
+          currentTripId: remote.currentTripId || null,
+          kadMode: remote.kadMode || 'half',
+          currencies: deepClone(remote.currencies) || null
+        };
+        window._lastSyncTime = remote.updatedAt?.seconds || 0;
+        console.log('[INIT] ✅ Loaded from cloud:', window.state.trips.length, 'trips');
+      } else {
+        console.log('[INIT] No cloud doc yet, loading cache');
+        loadFromCache();
+      }
+    } catch(e) {
+      console.error('[INIT] ❌ Cloud load failed:', e);
+      loadFromCache();
+    }
+  } else {
+    console.warn('[INIT] No user/db available, using cache. user=', !!user, 'db=', !!db);
+    loadFromCache();
+  }
+
+  state = window.state;
+  if(!state.cats) state.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
+  ['расходы','премия'].forEach(t=>{
+    if(!state.cats[t]) state.cats[t]=[...DEFAULT_CATS[t]];
+    if(!state.cats[t].includes('Иное')) state.cats[t].push('Иное');
+  });
+  if(!state.cats.аванс) state.cats.аванс=[...DEFAULT_CATS.аванс];
+  if(!state.currentTripId && state.trips.length) {
+    const s = [...state.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0));
+    state.currentTripId = s[0].id;
+  }
+  window._localDirty = false;
+  window._initializing = true;
+  loadTripForm();
+  updateSelector();
+  setTimeout(() => { window._initializing = false; }, 1000);
+}
+
+function save() {
+  if (window._initializing) {
+    console.log('[SAVE] Ignored during init');
+    return;
+  }
+  window._localDirty = true;
+  try { localStorage.setItem('rtcache', JSON.stringify(window.state)); } catch(e){}
+  if(window._saveTimer) clearTimeout(window._saveTimer);
+  window._saveTimer = setTimeout(() => {
+    window._saveTimer = null;
+    if(window._saveToCloud) window._saveToCloud();
+  }, 800);
+}
+
+function ct() { return state.trips.find(t=>t.id===state.currentTripId)||null; }
+function genId() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+// Универсальный парсер чисел: принимает "1,5" "1.5" "1 234,56" — всё корректно
+function parseNum(v){
+  if(v===null||v===undefined||v==='')return 0;
+  if(typeof v==='number')return isNaN(v)?0:v;
+  const s=String(v).trim().replace(/\s+/g,'').replace(',','.');
+  const n=parseFloat(s);
+  return isNaN(n)?0:n;
+}
+window.parseNum=parseNum;
+
+function toEUR(sum,cur) {
+  const trip=ct();
+  const rPLN=trip?(parseNum(trip.trip.rateEURPLN)||4.25):4.25;
+  const rBYN=trip?(parseNum(trip.trip.rateEURBYN)||3.20):3.20;
+  const c=getCurs();
+  if(cur===c.cur2.name||cur==='PLN')return parseNum(sum)/rPLN;
+  if(cur===c.cur3.name||cur==='BYN')return parseNum(sum)/rBYN;
+  return parseNum(sum);
+}
+function fmt(n){return(Math.round(n*100)/100).toFixed(2);}
+function calcHours(d1,t1,d2,t2){if(!d1||!d2)return 0;const s=new Date(d1+'T'+(t1||'00:00')),e=new Date(d2+'T'+(t2||'00:00'));const ms=e-s;if(ms<=0)return 0;return Math.ceil(ms/3600000);}
+function calcDaysExact(d1,t1,d2,t2){return calcHours(d1,t1,d2,t2)/24;}
+function calcDaysDisp(d1,t1,d2,t2){return Math.ceil(calcHours(d1,t1,d2,t2)/24);}
+function getKadMode(){return state.kadMode||'half';}
+function setKadMode(mode){state.kadMode=mode;save();renderKadModeUI();updateKadFormula();}
+function renderKadModeUI(){const mode=getKadMode();['half','full','fullplus'].forEach(m=>{const opt=document.getElementById('kadmode-'+m);if(opt)opt.classList.toggle('active',m===mode);});}
+function calcDaysFullPlus(d1,t1,d2,t2){if(!d1||!d2)return 0;const start=new Date(d1+'T00:00'),end=new Date(d2+'T00:00');const diff=Math.round((end-start)/(1000*60*60*24));return diff+1;}
+function calcKadencia(daysExact,daily,d1,t1,d2,t2){
+  const mode=getKadMode();let pay,formula;
+  if(mode==='full'){const whole=Math.floor(daysExact);pay=whole*daily;formula=`${whole} × ${fmt(daily)} (только полные дни)`;}
+  else if(mode==='fullplus'){const days=calcDaysFullPlus(d1,t1,d2,t2);pay=days*daily;formula=`${days} × ${fmt(daily)} (вкл. дни начала/конца)`;}
+  else{const whole=Math.floor(daysExact);const rem=daysExact-whole;if(rem===0){pay=whole*daily;formula=`${whole} × ${fmt(daily)} EUR`;}else if(rem<0.5){pay=whole*daily+daily/2;formula=`${whole} × ${fmt(daily)} + ${fmt(daily/2)} (полдня)`;}else{pay=(whole+1)*daily;formula=`${whole+1} × ${fmt(daily)} (остаток ≥ 12ч → полный день)`;}}
+  return{pay,formula};
+}
+function formatDur(d1,t1,d2,t2){const h=calcHours(d1,t1,d2,t2);if(!h)return '—';return`${Math.floor(h/24)}д ${h%24}ч`;}
+function fmtDate(d){if(!d)return '';const p=d.split('-');return`${p[2]}.${p[1]}.${p[0]}`;}
+function fmtDT(ts){if(!ts)return '';const d=new Date(ts);return d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
+
+// ===== SCREENS =====
+function showScreen(name){
+  // Блокируем переход на «Операции» если не заполнены курсы валют
+  if(name==='ops'){
+    const trip=ct();
+    if(trip){
+      const t=trip.trip;
+      const rPLN=parseNum(t.rateEURPLN);
+      const rBYN=parseNum(t.rateEURBYN);
+      if(!rPLN||!rBYN){
+        const missing=[];
+        if(!rPLN)missing.push('EUR/'+((getCurs().cur2&&getCurs().cur2.name)||'PLN'));
+        if(!rBYN)missing.push('EUR/'+((getCurs().cur3&&getCurs().cur3.name)||'BYN'));
+        showToast('⚠️ Укажите курсы валют: '+missing.join(', '),'error');
+        // Переключаемся на вкладку рейса и подсвечиваем поля
+        name='trip';
+        setTimeout(()=>{
+          ['rateEURPLN','rateEURBYN'].forEach(id=>{
+            const el=document.getElementById(id);
+            if(!el)return;
+            if(!parseNum(el.value)){
+              el.style.outline='2px solid var(--red)';
+              el.style.boxShadow='0 0 0 3px rgba(231,76,60,0.25)';
+              setTimeout(()=>{el.style.outline='';el.style.boxShadow='';},2500);
+            }
+          });
+          document.getElementById('rateEURPLN')?.scrollIntoView({behavior:'smooth',block:'center'});
+        },50);
+      }
+    }
+  }
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  if(name==='ops')renderOps(currentFilter);
+  if(name==='summary')renderSummary();
+  if(name==='settings')renderSettings();
+  const fab=document.getElementById('fabAddOp');
+  if(fab)fab.style.display=name==='ops'?'flex':'none';
+}
+
+// Обновляем визуальную блокировку кнопки «Операции» в навбаре
+function updateOpsNavLock(){
+  const btn=document.getElementById('nav-ops');
+  const hint=document.getElementById('ratesHint');
+  const hintText=document.getElementById('ratesHintText');
+  const trip=ct();
+  const locked = !trip || !parseNum(trip.trip.rateEURPLN) || !parseNum(trip.trip.rateEURBYN);
+  if(btn){
+    if(locked)btn.classList.add('locked');
+    else btn.classList.remove('locked');
+  }
+  if(hint&&hintText){
+    const icon=hint.querySelector('.rates-hint-icon');
+    if(locked){
+      hint.classList.remove('unlocked');
+      if(icon)icon.textContent='🔒';
+      hintText.innerHTML='Заполните оба курса — вкладка <b>Операции</b> разблокируется автоматически. Суммы в PLN и BYN будут пересчитываться в EUR в реальном времени при изменении курсов.';
+    } else {
+      hint.classList.add('unlocked');
+      if(icon)icon.textContent='✅';
+      hintText.innerHTML='Курсы заданы — вкладка <b>Операции</b> активна. Суммы в PLN и BYN автоматически пересчитываются в EUR при изменении курсов.';
+    }
+  }
+}
+
+function recalcOpsEur(){
+  const trip=ct();if(!trip)return;
+  let changed=false;
+  trip.ops.forEach(op=>{
+    if(op.cur!=='EUR'){
+      const newEur=toEUR(op.sum,op.cur);
+      if(Math.abs(newEur-(op.eur||0))>0.0001){op.eur=newEur;changed=true;}
+    }
+  });
+  if(changed){
+    trip.lastEdit=Date.now();
+    // Не вызываем полный save() чтобы не мигало — обновим state тихо
+    save();
+    // Если открыта вкладка операций или отчёта — перерисуем
+    if(document.getElementById('screen-ops').classList.contains('active'))renderOps(currentFilter);
+    if(document.getElementById('screen-summary').classList.contains('active'))renderSummary();
+  }
+}
+
+// ===== TRIPS =====
+const STATUS_MAP={active:{label:'🟡 В работе',cls:'active'},ready:{label:'🔵 К сдаче',cls:'ready'},closed:{label:'🟢 Закрыт',cls:'closed'}};
+
+// Track if a new (empty) trip is already pending fill
+let _pendingNewTrip = false;
+
+function createNewTrip(){
+  // If there's already an unfilled trip — warn user
+  const existing = ct();
+  if (existing) {
+    const t = existing.trip;
+    const hasName = (t.tripName||'').trim();
+    const hasDate = t.dateStart;
+    const hasRates = (parseNum(t.rateEURPLN)||0) > 0 && (parseNum(t.rateEURBYN)||0) > 0;
+    if (!hasName || !hasDate || !hasRates) {
+      let missing = [];
+      if (!hasName) missing.push('название рейса');
+      if (!hasDate) missing.push('дата начала');
+      if (!hasRates) missing.push('курсы валют (EUR/PLN и EUR/BYN)');
+      showToast('⚠️ Сначала заполните: ' + missing.join(', '), 'error');
+      showScreen('trip');
+      return;
+    }
+  }
+  const id=genId();
+  state.trips.unshift({id,trip:{payType:'stavka'},ops:[],lastEdit:Date.now()});
+  state.currentTripId=id;
+  save();loadTripForm();updateSelector();showScreen('trip');
+  showToast('✅ Новый рейс создан — заполните данные', 'success');
+}
+function switchToTrip(id){state.currentTripId=id;save();loadTripForm();updateSelector();closeModal('tripsModal');showScreen('trip');}
+function deleteCurrentTrip(){
+  const trip=ct();if(!trip)return;
+  if(!confirm(`Удалить рейс «${trip.trip.tripName||'без названия'}»?`))return;
+  state.trips=state.trips.filter(t=>t.id!==state.currentTripId);
+  state.currentTripId=state.trips.length?[...state.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0))[0].id:null;
+  save();loadTripForm();updateSelector();
+}
+function deleteTripById(id){
+  const t=state.trips.find(x=>x.id===id);
+  if(!confirm(`Удалить рейс «${t?(t.trip.tripName||'без названия'):''}»?`))return;
+  state.trips=state.trips.filter(x=>x.id!==id);
+  if(state.currentTripId===id)state.currentTripId=state.trips.length?[...state.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0))[0].id:null;
+  save();loadTripForm();updateSelector();openTripsModal();
+}
+function updateSelector(){
+  const trip=ct();
+  const sn=document.getElementById('selectorName');
+  if(trip){const s=STATUS_MAP[trip.trip.status||'active'];sn.innerHTML=(trip.trip.tripName||'Без названия')+' <span class="status-badge '+s.cls+'" style="font-size:10px;padding:1px 7px">'+s.label+'</span>';}
+  else{sn.textContent='Нет рейса';}
+  if(trip&&trip.trip.dateStart){const end=trip.trip.dateEnd?' — '+fmtDate(trip.trip.dateEnd):'';document.getElementById('selectorDate').textContent=fmtDate(trip.trip.dateStart)+end+(trip.lastEdit?' · Ред: '+fmtDT(trip.lastEdit):'');}
+  else{document.getElementById('selectorDate').textContent='Нажмите для выбора рейса';}
+  const has=!!trip;
+  document.getElementById('noTripBanner').style.display=has?'none':'';
+  document.getElementById('tripFormWrap').style.display=has?'':'none';
+}
+function openTripsModal(){
+  const el=document.getElementById('tripsListContent');
+  if(!state.trips.length){el.innerHTML='<div class="empty"><div class="empty-icon">🗂</div><div class="empty-text">Нет сохранённых рейсов</div></div>';}
+  else{
+    const sorted=[...state.trips].sort((a,b)=>(b.lastEdit||0)-(a.lastEdit||0));
+    el.innerHTML=sorted.map(t=>{
+      const isCur=t.id===state.currentTripId;
+      const s=calcSummaryFor(t);const tc=s.total>0?'pos':s.total<0?'neg':'zero';
+      const ops=t.ops?t.ops.length:0;
+      const dates=t.trip.dateStart?fmtDate(t.trip.dateStart)+(t.trip.dateEnd?' — '+fmtDate(t.trip.dateEnd):''):'Дата не указана';
+      return`<div class="trip-list-item${isCur?' current':''}" onclick="switchToTrip('${t.id}')">
+        <span style="font-size:22px">${isCur?'📍':'🚛'}</span>
+        <div class="trip-list-info"><div class="trip-list-name">${t.trip.tripName||'Без названия'} ${statusBadgeHTML(t.trip.status)}</div><div class="trip-list-meta">${dates} · ${ops} оп.</div></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <div class="trip-list-total ${tc}">${s.total<0?'−':''}${fmt(Math.abs(s.total))}<span class="cur">EUR</span></div>
+          <button class="trip-list-del" onclick="event.stopPropagation();deleteTripById('${t.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('tripsModal').classList.add('open');
+}
+function statusBadgeHTML(status){const s=STATUS_MAP[status||'active'];return`<span class="status-badge ${s.cls}">${s.label}</span>`;}
+
+// ===== TRIP FORM =====
+function setPayType(type){
+  const trip=ct();if(trip)trip.trip.payType=type;
+  document.getElementById('payTypeStavka').classList.toggle('active',type==='stavka');
+  document.getElementById('payTypeKad').classList.toggle('active',type==='kadencia');
+  document.getElementById('stavkaFields').style.display=type==='stavka'?'':'none';
+  document.getElementById('kadenciaFields').style.display=type==='kadencia'?'':'none';
+  // Show reminder only when user actively switches (trip exists and field is empty)
+  if(trip){
+    if(type==='kadencia'){
+      const daily=parseNum(document.getElementById('dailyRate').value);
+      if(!daily) showToast('💡 Укажите сумму суточных (EUR/день)', '');
+    } else if(type==='stavka'){
+      const stavka=parseNum(document.getElementById('stavkaEUR').value);
+      if(!stavka) showToast('💡 Укажите сумму ставки за рейс (EUR)', '');
+    }
+  }
+  updateKadFormula();
+}
+function loadTripForm(){
+  const trip=ct();if(!trip){updateSelector();updateOpsNavLock();return;}
+  const t=trip.trip;loadStatus();
+  ['tripName','dateStart','timeStart','dateEnd','timeEnd','stavkaEUR','dailyRate','rateEURPLN','rateEURBYN','prevDebt','tripNote'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=t[id]||'';});
+  setPayType(t.payType||'stavka');updateDays();updateSelector();updateOpsNavLock();
+}
+function updateDays(){
+  const d1=document.getElementById('dateStart').value,t1=document.getElementById('timeStart').value;
+  const d2=document.getElementById('dateEnd').value,t2=document.getElementById('timeEnd').value;
+  const info=document.getElementById('daysInfo');
+  if(d1&&d2){info.style.display='';document.getElementById('daysCount').textContent=calcDaysDisp(d1,t1,d2,t2);document.getElementById('tripDuration').textContent=formatDur(d1,t1,d2,t2);}
+  else{info.style.display='none';}
+  updateKadFormula();
+}
+function updateKadFormula(){
+  const box=document.getElementById('kadFormulaBox');
+  if(!document.getElementById('payTypeKad').classList.contains('active')){box.style.display='none';return;}
+  const d1=document.getElementById('dateStart').value,t1=document.getElementById('timeStart').value;
+  const d2=document.getElementById('dateEnd').value,t2=document.getElementById('timeEnd').value;
+  const daily=parseNum(document.getElementById('dailyRate').value);
+  if(!d1||!d2||!daily){box.style.display='none';return;}
+  const dEx=calcDaysExact(d1,t1,d2,t2);const k=calcKadencia(dEx,daily,d1,t1,d2,t2);
+  box.style.display='';box.innerHTML=`📐 ${k.formula}<br><b>= ${fmt(k.pay)} EUR</b>`;
+}
+function setStatus(val){const trip=ct();if(!trip)return;trip.trip.status=val;trip.lastEdit=Date.now();save();updateSelector();renderStatusBtns(val);}
+function renderStatusBtns(val){document.querySelectorAll('.status-btn').forEach(b=>{b.classList.toggle('active',b.dataset.status===val);});}
+function loadStatus(){const trip=ct();const val=(trip&&trip.trip.status)||'active';renderStatusBtns(val);}
+
+let autosaveTimer=null;
+function autoSaveTrip(){
+  const trip=ct();if(!trip)return;
+  const prevPLN=trip.trip.rateEURPLN;
+  const prevBYN=trip.trip.rateEURBYN;
+  trip.trip={...trip.trip,
+    tripName:document.getElementById('tripName').value.trim()||trip.trip.tripName,
+    status:trip.trip.status||'active',
+    dateStart:document.getElementById('dateStart').value,
+    timeStart:document.getElementById('timeStart').value,
+    dateEnd:document.getElementById('dateEnd').value,
+    timeEnd:document.getElementById('timeEnd').value,
+    stavkaEUR:document.getElementById('stavkaEUR').value,
+    dailyRate:document.getElementById('dailyRate').value,
+    rateEURPLN:document.getElementById('rateEURPLN').value,
+    rateEURBYN:document.getElementById('rateEURBYN').value,
+    prevDebt:document.getElementById('prevDebt').value,
+    tripNote:document.getElementById('tripNote').value
+  };
+  trip.lastEdit=Date.now();save();updateSelector();
+  // Если курсы изменились — пересчитать EUR у всех операций
+  if(prevPLN!==trip.trip.rateEURPLN||prevBYN!==trip.trip.rateEURBYN){
+    recalcOpsEur();
+  }
+  updateOpsNavLock();
+  const st=document.getElementById('autosaveStatus');
+  if(st){st.textContent='✅ Сохранено '+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'});st.style.color='var(--green)';}
+}
+function scheduleAutosave(){
+  if(autosaveTimer)clearTimeout(autosaveTimer);
+  const st=document.getElementById('autosaveStatus');
+  if(st){st.textContent='⏳ Сохранение...';st.style.color='var(--muted)';}
+  autosaveTimer=setTimeout(autoSaveTrip,1500);
+}
+
+// ===== MODALS =====
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// ===== OPS =====
+function openAddOp(){
+  if(!ct()){showToast('Сначала создайте рейс','error');return;}
+  document.getElementById('opDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('opType').value='';
+  document.getElementById('opCat').innerHTML='<option value="">— сначала тип —</option>';
+  document.getElementById('opSum').value='';document.getElementById('opCur').value='EUR';
+  document.getElementById('opNote').value='';
+  document.getElementById('noteReqMark').style.display='none';
+  document.getElementById('convertedPreview').style.display='none';
+  document.getElementById('modalErr').style.display='none';
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function onTypeChange(){
+  const type=document.getElementById('opType').value;const catSel=document.getElementById('opCat');
+  catSel.innerHTML='<option value="">— выбрать —</option>';
+  if(type&&state.cats[type])state.cats[type].forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;catSel.appendChild(o);});
+  document.getElementById('noteReqMark').style.display='none';
+}
+function onCatChange(){document.getElementById('noteReqMark').style.display=document.getElementById('opCat').value==='Иное'?'':'none';updateConvert();}
+function updateConvert(){
+  const sum=parseNum(document.getElementById('opSum').value),cur=document.getElementById('opCur').value;
+  const p=document.getElementById('convertedPreview');
+  if(sum&&cur!=='EUR'){document.getElementById('convertedVal').textContent=fmt(toEUR(sum,cur));p.style.display='';}else{p.style.display='none';}
+}
+function saveOp(){
+  const err=document.getElementById('modalErr');err.style.display='none';
+  const date=document.getElementById('opDate').value,type=document.getElementById('opType').value;
+  const cat=document.getElementById('opCat').value,note=document.getElementById('opNote').value.trim();
+  const sum=parseNum(document.getElementById('opSum').value),cur=document.getElementById('opCur').value;
+  if(!date){err.textContent='Укажите дату';err.style.display='';return;}
+  if(!type){err.textContent='Выберите тип';err.style.display='';return;}
+  if(!cat){err.textContent='Выберите категорию';err.style.display='';return;}
+  if(cat==='Иное'&&!note){err.textContent='Для «Иное» обязательно примечание';err.style.display='';return;}
+  if(!sum||sum<=0){err.textContent='Введите сумму больше 0';err.style.display='';return;}
+  const trip=ct();
+  trip.ops.push({id:Date.now(),date,type,cat,note,sum,cur,eur:toEUR(sum,cur)});
+  trip.lastEdit=Date.now();save();closeModal('modalOverlay');renderOps(currentFilter);
+}
+let currentFilter='all';
+function filterOps(f,btn){
+  currentFilter=f;
+  document.querySelectorAll('.filter-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderOps(f);
+}
+function renderOps(filter){
+  const list=document.getElementById('opsList');
+  const trip=ct();const allOps=trip?trip.ops:[];
+  const ops=filter==='all'?allOps:allOps.filter(o=>o.type===filter);
+  document.getElementById('opsCount').textContent=`${allOps.length} записей`;
+  if(!ops.length){list.innerHTML=`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">${allOps.length?'Нет операций этого типа':'Нажмите «+» для добавления'}</div></div>`;return;}
+  const sorted=[...ops].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  list.innerHTML=sorted.map(op=>{
+    const sign=op.type==='расходы'?'−':'+';
+    const eurStr=op.cur!=='EUR'?`≈ ${fmt(op.eur)} EUR`:'';
+    const noteStr=op.note?`📝 ${op.note}`:'';
+    const infoRight=[eurStr,noteStr].filter(Boolean).join(' · ');
+    return`<div class="op-row" onclick="openOpAction(${op.id})">
+      <div class="op-row-stripe ${op.type}"></div>
+      <div class="op-cell-date">${fmtDate(op.date)}</div>
+      <div class="op-cell-cat">${op.cat}</div>
+      <div class="op-cell-sum ${op.type}">${sign}${fmt(op.sum)} ${op.cur}</div>
+      <div class="op-row-bottom"><span class="op-row-type">${op.type}</span><span class="op-row-note">${infoRight}</span><span class="op-row-arrow">›</span></div>
+    </div>`;
+  }).join('');
+}
+let currentOpId=null;
+function openOpAction(id){
+  const trip=ct();if(!trip)return;id=Number(id);
+  const op=trip.ops.find(o=>Number(o.id)===id);if(!op)return;
+  currentOpId=id;
+  const typeColors={расходы:'var(--red)',аванс:'var(--green)',премия:'var(--accent)'};
+  document.getElementById('opActionTitle').textContent=op.type.charAt(0).toUpperCase()+op.type.slice(1);
+  document.getElementById('opActionType').textContent=op.type;
+  document.getElementById('opActionCat').textContent=op.cat;
+  document.getElementById('opActionNote').textContent=op.note?'📝 '+op.note:'';
+  document.getElementById('opActionDate').textContent=fmtDate(op.date);
+  const sign=op.type==='расходы'?'−':'+';
+  document.getElementById('opActionSum').textContent=sign+fmt(op.sum)+' '+op.cur+(op.cur!=='EUR'?' ≈ '+fmt(op.eur)+' EUR':'');
+  document.getElementById('opActionSum').style.color=typeColors[op.type]||'var(--text)';
+  document.getElementById('opActionModal').classList.add('open');
+}
+function deleteOpAction(){
+  if(!confirm('Удалить операцию?'))return;
+  const trip=ct();trip.ops=trip.ops.filter(o=>Number(o.id)!==Number(currentOpId));
+  trip.lastEdit=Date.now();save();closeModal('opActionModal');renderOps(currentFilter);currentOpId=null;
+}
+function editOpStart(){
+  const trip=ct();if(!trip)return;
+  const op=trip.ops.find(o=>Number(o.id)===Number(currentOpId));if(!op)return;
+  const typeEl=document.getElementById('editOpType');typeEl.value=op.type;onEditTypeChange();
+  const catEl=document.getElementById('editOpCat');catEl.value=op.cat;
+  if(!catEl.value){const opt=document.createElement('option');opt.value=op.cat;opt.textContent=op.cat;catEl.appendChild(opt);catEl.value=op.cat;}
+  onEditCatChange();
+  document.getElementById('editOpDate').value=op.date;
+  document.getElementById('editOpNote').value=op.note||'';
+  document.getElementById('editOpSum').value=op.sum;
+  document.getElementById('editOpCur').value=op.cur;
+  document.getElementById('editOpErr').style.display='none';
+  updateEditConvert();
+  document.getElementById('opActionModal').classList.remove('open');
+  document.getElementById('opEditModal').classList.add('open');
+}
+function onEditTypeChange(){const type=document.getElementById('editOpType').value;const catSel=document.getElementById('editOpCat');catSel.innerHTML='';if(type&&state.cats[type])state.cats[type].forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;catSel.appendChild(o);});document.getElementById('editNoteReqMark').style.display='none';}
+function onEditCatChange(){document.getElementById('editNoteReqMark').style.display=document.getElementById('editOpCat').value==='Иное'?'':'none';updateEditConvert();}
+function updateEditConvert(){const sum=parseNum(document.getElementById('editOpSum').value);const cur=document.getElementById('editOpCur').value;const p=document.getElementById('editConvertedPreview');if(sum&&cur!=='EUR'){document.getElementById('editConvertedVal').textContent=fmt(toEUR(sum,cur));p.style.display='';}else{p.style.display='none';}}
+function saveEditOp(){
+  const err=document.getElementById('editOpErr');err.style.display='none';
+  const date=document.getElementById('editOpDate').value;const type=document.getElementById('editOpType').value;
+  const cat=document.getElementById('editOpCat').value;const note=document.getElementById('editOpNote').value.trim();
+  const sum=parseNum(document.getElementById('editOpSum').value);const cur=document.getElementById('editOpCur').value;
+  if(!date){err.textContent='Укажите дату';err.style.display='';return;}
+  if(!cat){err.textContent='Выберите категорию';err.style.display='';return;}
+  if(cat==='Иное'&&!note){err.textContent='Для «Иное» обязательно примечание';err.style.display='';return;}
+  if(!sum||sum<=0){err.textContent='Введите сумму больше 0';err.style.display='';return;}
+  const trip=ct();const idx=trip.ops.findIndex(o=>Number(o.id)===Number(currentOpId));if(idx===-1)return;
+  trip.ops[idx]={...trip.ops[idx],date,type,cat,note,sum,cur,eur:toEUR(sum,cur)};
+  trip.lastEdit=Date.now();save();closeModal('opEditModal');renderOps(currentFilter);currentOpId=null;
+}
+
+// ===== SUMMARY =====
+function calcSummaryFor(tripObj){
+  const t=tripObj.trip||{},ops=tripObj.ops||[];
+  const dEx=calcDaysExact(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd);
+  const dDisp=calcDaysDisp(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd);
+  const debt=parseNum(t.prevDebt);
+  let stavka=0,stavkaLabel='',stavkaFormula='';
+  if(t.payType==='stavka'){stavka=parseNum(t.stavkaEUR);stavkaLabel=fmt(stavka)+' EUR';stavkaFormula='Ставка за рейс';}
+  else{const daily=parseNum(t.dailyRate);const k=calcKadencia(dEx,daily,t.dateStart,t.timeStart,t.dateEnd,t.timeEnd);stavka=k.pay;stavkaLabel=fmt(stavka)+' EUR';stavkaFormula=k.formula;}
+  const expenses=ops.filter(o=>o.type==='расходы').reduce((s,o)=>s+o.eur,0);
+  const advance=ops.filter(o=>o.type==='аванс').reduce((s,o)=>s+o.eur,0);
+  const bonus=ops.filter(o=>o.type==='премия').reduce((s,o)=>s+o.eur,0);
+  const total=debt+stavka+bonus+expenses-advance;
+  return{dEx,dDisp,debt,stavka,stavkaLabel,stavkaFormula,expenses,advance,bonus,total};
+}
+function calcSummary(){const trip=ct();if(!trip)return{dEx:0,dDisp:0,debt:0,stavka:0,stavkaLabel:'',stavkaFormula:'',expenses:0,advance:0,bonus:0,total:0};return calcSummaryFor(trip);}
+function renderSummary(){
+  const s=calcSummary();const trip=ct();
+  const ssb=document.getElementById('summaryStatusBadge');if(ssb&&trip){ssb.innerHTML=statusBadgeHTML(trip.trip.status);}
+  const totalEl=document.getElementById('summaryTotal');totalEl.textContent=(s.total<0?'−':'')+fmt(Math.abs(s.total));totalEl.className='summary-total-val '+(s.total>=0?'pos':'neg');
+  const lel=document.getElementById('lastEditLine');if(trip&&trip.lastEdit){document.getElementById('lastEditText').textContent='Последнее изменение: '+fmtDT(trip.lastEdit);lel.style.display='';}else{lel.style.display='none';}
+  document.getElementById('statStavka').textContent=s.stavkaLabel;document.getElementById('statStavkaSub').textContent=s.stavkaFormula;
+  document.getElementById('statDebt').textContent=fmt(s.debt);document.getElementById('statExpenses').textContent=fmt(s.expenses);
+  document.getElementById('statAdvance').textContent=fmt(s.advance);document.getElementById('statBonus').textContent=fmt(s.bonus);
+  document.getElementById('statDays').textContent=s.dDisp;
+  const t=trip?trip.trip:{};document.getElementById('statDaysSub').textContent=t.payType==='kadencia'&&s.dEx>0?`точно: ${s.dEx.toFixed(2)} дн.`:'дней';
+  const ops=trip?trip.ops:[];
+  const groups=document.getElementById('summaryGroups');
+  function buildGroup(title,opType,colorClass){
+    const typeOps=ops.filter(o=>o.type===opType);if(!typeOps.length)return'';
+    const bycat={};typeOps.forEach(o=>{if(!bycat[o.cat])bycat[o.cat]={sum:0,items:[]};bycat[o.cat].sum+=o.eur;bycat[o.cat].items.push(o);});
+    const total=typeOps.reduce((s,o)=>s+o.eur,0);
+    const rows=Object.entries(bycat).map(([cat,data])=>{
+      let sub='';if(cat==='Иное'&&data.items.length){sub=data.items.map(op=>`<div class="inoye-item"><span class="inoye-note">${op.note||'—'} <span style="font-size:10px">${fmtDate(op.date)}</span></span><span class="inoye-sum ${colorClass}">${fmt(op.sum)} ${op.cur}${op.cur!=='EUR'?' ≈ '+fmt(op.eur)+' EUR':''}</span></div>`).join('');}
+      return`<div class="group-row"><div class="group-row-head"><span class="group-row-label">${cat}${cat==='Иное'&&data.items.length>1?' ('+data.items.length+'×)':''}</span><span class="group-row-val ${colorClass}">${fmt(data.sum)} EUR</span></div>${sub}</div>`;
+    }).join('');
+    return`<div class="group-card"><div class="group-title"><span>${title}</span><span class="${colorClass}">${fmt(total)} EUR</span></div>${rows}</div>`;
+  }
+  groups.innerHTML=buildGroup('💸 Расходы','расходы','red')+buildGroup('💰 Аванс','аванс','green')+buildGroup('🎁 Премии','премия','orange');
+}
+
+// ===== CURRENCIES =====
+function getCurs(){return state.currencies||{cur2:{name:'PLN',symbol:'zł'},cur3:{name:'BYN',symbol:'р'}};}
+function saveCurSettings(){
+  const c2name=(document.getElementById('cur2Name').value.trim()||'PLN').toUpperCase();
+  const c2sym=document.getElementById('cur2Symbol').value.trim()||'zł';
+  const c3name=(document.getElementById('cur3Name').value.trim()||'BYN').toUpperCase();
+  const c3sym=document.getElementById('cur3Symbol').value.trim()||'р';
+  state.currencies={cur2:{name:c2name,symbol:c2sym},cur3:{name:c3name,symbol:c3sym}};save();
+  updateCurDropdowns();const st=document.getElementById('curSaveStatus');if(st){st.textContent='✅ Сохранено';setTimeout(()=>{st.textContent='';},2000);}
+}
+function updateCurDropdowns(){
+  const c=getCurs();
+  ['opCur','editOpCur'].forEach(id=>{const sel=document.getElementById(id);if(!sel)return;const cur=sel.value;sel.innerHTML=`<option value="EUR">EUR €</option><option value="${c.cur2.name}">${c.cur2.name} ${c.cur2.symbol}</option><option value="${c.cur3.name}">${c.cur3.name} ${c.cur3.symbol}</option>`;if([...sel.options].some(o=>o.value===cur))sel.value=cur;});
+  const l2=document.getElementById('labelCur2');const l3=document.getElementById('labelCur3');if(l2)l2.textContent='EUR/'+c.cur2.name;if(l3)l3.textContent='EUR/'+c.cur3.name;
+}
+function loadCurSettings(){const c=getCurs();const n2=document.getElementById('cur2Name');const s2=document.getElementById('cur2Symbol');const n3=document.getElementById('cur3Name');const s3=document.getElementById('cur3Symbol');if(n2)n2.value=c.cur2.name;if(s2)s2.value=c.cur2.symbol;if(n3)n3.value=c.cur3.name;if(s3)s3.value=c.cur3.symbol;updateCurDropdowns();}
+
+// ===== SETTINGS =====
+function renderSettings(){
+  loadCurSettings();renderKadModeUI();updateBackupUI();applyTheme();
+  ['расходы','аванс','премия'].forEach(type=>{
+    const el=document.getElementById('catList-'+type);
+    el.innerHTML=(state.cats[type]||[]).map((c,i)=>{const locked=c==='Иное';return`<div class="cat-item"><span class="cat-name">${c}</span>${locked?`<span class="cat-locked">обязательная</span>`:`<button class="cat-del" onclick="deleteCat('${type}',${i})">✕</button>`}</div>`;}).join('')||'<div style="color:var(--muted);font-size:13px;padding:8px 0">Нет категорий</div>';
+  });
+}
+function addCat(type){const inp=document.getElementById('newCat-'+type);const val=inp.value.trim();if(!val){alert('Введите название');return;}if(state.cats[type].includes(val)){alert('Уже есть');return;}const iIdx=state.cats[type].indexOf('Иное');if(iIdx>=0)state.cats[type].splice(iIdx,0,val);else state.cats[type].push(val);inp.value='';save();renderSettings();}
+function deleteCat(type,idx){if(state.cats[type][idx]==='Иное'){alert('«Иное» нельзя удалить');return;}if(!confirm(`Удалить «${state.cats[type][idx]}»?`))return;state.cats[type].splice(idx,1);save();renderSettings();}
+function resetCats(){if(!confirm('Сбросить?'))return;state.cats=JSON.parse(JSON.stringify(DEFAULT_CATS));save();renderSettings();showToast('Сброшено','success');}
+
+// ===== PDF =====
+function generatePDF(){
+  const trip=ct();if(!trip){showToast('Нет активного рейса','error');return;}
+  const t=trip.trip,s=calcSummary();const today=new Date().toLocaleDateString('ru-RU');
+  const c=getCurs();
+
+  // === Хелперы для блока исходных данных ===
+  const kadModeNames = {
+    half: 'Полдня (остаток ≥12ч → +1 день, иначе +0.5)',
+    full: 'Только полные дни',
+    fullplus: 'Полные дни + дни начала и конца'
+  };
+  const payTypeName = t.payType==='kadencia' ? 'Каденция (суточные × дни)' : 'Ставка за рейс';
+  const statusLabel = STATUS_MAP[t.status||'active'].label;
+  const dur = (t.dateStart && t.dateEnd) ? formatDur(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd) : '—';
+  const daysDisp = (t.dateStart && t.dateEnd) ? calcDaysDisp(t.dateStart,t.timeStart,t.dateEnd,t.timeEnd) : 0;
+  const startDT = t.dateStart ? (fmtDate(t.dateStart) + (t.timeStart?' в '+t.timeStart:'')) : '—';
+  const endDT = t.dateEnd ? (fmtDate(t.dateEnd) + (t.timeEnd?' в '+t.timeEnd:'')) : '—';
+
+  // Блок ставки/каденции
+  let payBlock = '';
+  if (t.payType === 'kadencia') {
+    const daily = parseNum(t.dailyRate);
+    payBlock =
+      `<tr><td>Тип оплаты</td><td><b>${payTypeName}</b></td></tr>` +
+      `<tr><td>Суточные</td><td>${fmt(daily)} EUR/день</td></tr>` +
+      `<tr><td>Режим расчёта</td><td>${kadModeNames[getKadMode()]}</td></tr>` +
+      `<tr><td>Сумма по каденции</td><td><b style="color:#c47d00">${s.stavkaLabel}</b> <span style="color:#888;font-size:11px">(${s.stavkaFormula})</span></td></tr>`;
+  } else {
+    payBlock =
+      `<tr><td>Тип оплаты</td><td><b>${payTypeName}</b></td></tr>` +
+      `<tr><td>Ставка за рейс</td><td><b style="color:#c47d00">${fmt(parseNum(t.stavkaEUR))} EUR</b></td></tr>`;
+  }
+
+  // === Блок исходных данных ===
+  const inputDataBlock =
+    `<h2>📋 Исходные данные рейса</h2>` +
+    `<table><tbody>` +
+    `<tr><td style="width:42%">Название рейса</td><td><b>${t.tripName||'—'}</b></td></tr>` +
+    `<tr><td>Статус</td><td>${statusLabel}</td></tr>` +
+    `<tr style="background:#fafafa"><td colspan="2" style="font-weight:700;color:#c47d00;padding-top:8px">📅 Даты и время</td></tr>` +
+    `<tr><td>Начало</td><td>${startDT}</td></tr>` +
+    `<tr><td>Окончание</td><td>${endDT}</td></tr>` +
+    `<tr><td>Длительность</td><td>${dur}${daysDisp?' <span style="color:#888">('+daysDisp+' дн. к оплате)</span>':''}</td></tr>` +
+    `<tr style="background:#fafafa"><td colspan="2" style="font-weight:700;color:#c47d00;padding-top:8px">💼 Условия оплаты</td></tr>` +
+    payBlock +
+    `<tr style="background:#fafafa"><td colspan="2" style="font-weight:700;color:#c47d00;padding-top:8px">💱 Курсы валют</td></tr>` +
+    `<tr><td>1 EUR в ${c.cur2.name}</td><td>${parseNum(t.rateEURPLN)?fmt(parseNum(t.rateEURPLN))+' '+c.cur2.name:'—'}</td></tr>` +
+    `<tr><td>1 EUR в ${c.cur3.name}</td><td>${parseNum(t.rateEURBYN)?fmt(parseNum(t.rateEURBYN))+' '+c.cur3.name:'—'}</td></tr>` +
+    `<tr style="background:#fafafa"><td colspan="2" style="font-weight:700;color:#c47d00;padding-top:8px">💰 Финансы</td></tr>` +
+    `<tr><td>Задолженность с прошлых рейсов</td><td>${fmt(parseNum(t.prevDebt))} EUR</td></tr>` +
+    (t.tripNote ? `<tr style="background:#fafafa"><td colspan="2" style="font-weight:700;color:#c47d00;padding-top:8px">📝 Примечание</td></tr><tr><td colspan="2" style="white-space:pre-wrap;color:#333;line-height:1.5">${t.tripNote.replace(/</g,'&lt;')}</td></tr>` : '') +
+    `</tbody></table>`;
+
+  function pdfGroup(title,opType,color){const ops=trip.ops.filter(o=>o.type===opType);if(!ops.length)return'';const bycat={};ops.forEach(o=>{if(!bycat[o.cat])bycat[o.cat]={sum:0,items:[]};bycat[o.cat].sum+=o.eur;bycat[o.cat].items.push(o);});const total=ops.reduce((s,o)=>s+o.eur,0);let rows='';Object.entries(bycat).forEach(([cat,data])=>{rows+=`<tr><td style="padding-left:14px">${cat}</td><td style="text-align:right;color:${color};font-weight:700">${fmt(data.sum)} EUR</td></tr>`;if(cat==='Иное')data.items.forEach(op=>{rows+=`<tr><td style="padding-left:28px;color:#888;font-size:11px">↳ ${op.note||'—'} (${fmtDate(op.date)})</td><td style="text-align:right;font-size:11px;color:#888">${fmt(op.sum)} ${op.cur}</td></tr>`;});});return`<h2>${title}</h2><table><thead><tr><th>Категория</th><th style="text-align:right">EUR</th></tr></thead><tbody>${rows}<tr style="background:#f0f0f0"><td><b>Итого</b></td><td style="text-align:right;font-weight:900;color:${color}">${fmt(total)} EUR</td></tr></tbody></table>`;}
+  const opRows=trip.ops.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(op=>`<tr><td>${fmtDate(op.date)}</td><td class="b-${op.type}">${op.type}</td><td>${op.cat}</td><td>${op.note||'—'}</td><td style="text-align:right;font-weight:700">${fmt(op.sum)} ${op.cur}</td><td style="text-align:right">${fmt(op.eur)} EUR</td></tr>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Отчёт: ${t.tripName||'Рейс'}</title><style>body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;margin:0;padding:18px}h1{font-size:19px;margin-bottom:3px}h2{font-size:13px;margin:14px 0 5px;border-bottom:2px solid #f5a623;padding-bottom:3px;color:#c47d00}.meta{color:#666;font-size:11px;margin-bottom:14px}table{width:100%;border-collapse:collapse;margin-bottom:8px}th{background:#f0f0f0;padding:5px 8px;text-align:left;font-size:11px;text-transform:uppercase}td{padding:5px 8px;border-bottom:1px solid #eee}.total-box{background:#f9f3e3;border:2px solid #f5a623;border-radius:8px;padding:14px;margin:12px 0;text-align:center}.tv{font-size:30px;font-weight:900;color:${s.total>=0?'#27ae60':'#e74c3c'}}.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}.sb{background:#f8f8f8;border-radius:4px;padding:8px;text-align:center}.sl{font-size:10px;color:#888;text-transform:uppercase;margin-bottom:2px}.sv{font-size:14px;font-weight:900}.b-расходы{color:#e74c3c;font-weight:700}.b-аванс{color:#27ae60;font-weight:700}.b-премия{color:#e67e22;font-weight:700}@media print{body{padding:8px}}</style></head><body>
+  <h1>🚛 Отчёт по рейсу</h1><div class="meta">Сформирован: ${today} | <b>${t.tripName||'—'}</b> | ${fmtDate(t.dateStart)||'—'} — ${fmtDate(t.dateEnd)||'—'} | Статус: <b>${statusLabel}</b></div>
+  <div class="total-box"><div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Итого на руки</div><div class="tv">${s.total<0?'−':''}${fmt(Math.abs(s.total))} EUR</div></div>
+  ${inputDataBlock}
+  <div class="sg"><div class="sb"><div class="sl">${t.payType==='kadencia'?'Каденция':'Ставка'}</div><div class="sv" style="color:#e67e22">${fmt(s.stavka)}</div></div><div class="sb"><div class="sl">Расходы</div><div class="sv" style="color:#e74c3c">${fmt(s.expenses)}</div></div><div class="sb"><div class="sl">Аванс</div><div class="sv" style="color:#27ae60">${fmt(s.advance)}</div></div><div class="sb"><div class="sl">Премии</div><div class="sv" style="color:#e67e22">${fmt(s.bonus)}</div></div><div class="sb"><div class="sl">Задолж.</div><div class="sv" style="color:#3498db">${fmt(s.debt)}</div></div><div class="sb"><div class="sl">Дней</div><div class="sv" style="color:#3498db">${s.dDisp}</div></div></div>
+  ${pdfGroup('💸 Расходы','расходы','#e74c3c')}${pdfGroup('💰 Авансы','аванс','#27ae60')}${pdfGroup('🎁 Премии','премия','#e67e22')}
+  <h2>📋 Все операции (${trip.ops.length})</h2><table><thead><tr><th>Дата</th><th>Тип</th><th>Категория</th><th>Примечание</th><th>Сумма</th><th>EUR</th></tr></thead><tbody>${opRows||'<tr><td colspan="6" style="text-align:center;color:#888">Нет операций</td></tr>'}</tbody></table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`;
+  const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);
+  const opened=window.open(url,'_blank');
+  if(!opened){
+    // Fallback для iOS Safari: используем data-URL
+    try {
+      const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+      const a=document.createElement('a');a.href=dataUrl;a.download='otchet.html';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+    } catch(e2) {
+      // Последний резерв — открыть blob напрямую
+      const a=document.createElement('a');a.href=url;a.download='otchet.html';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+    }
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }
+}
+
+// ===== TOAST =====
+let toastTimer;
+function showToast(msg, type='') {
+  const el = document.getElementById('toastEl');
+  el.textContent = msg;
+  el.className = 'toast show' + (type ? ' '+type : '');
+  clearTimeout(toastTimer);
+  const duration = (type === 'error' || type === '') ? 3500 : 2500;
+  toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+window.showToast = showToast;
+
+// ===== INIT =====
+// ===== Кнопка "Сохранить" + индикатор статуса =====
+function updateSaveStatus(status, time) {
+  const el = document.getElementById('saveStatus');
+  if (!el) return;
+  const fmtT = (t) => {
+    const d = new Date(t);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  };
+  if (status === 'saving') { el.innerHTML = '⏳ Сохранение...'; el.style.color = '#f0ad4e'; }
+  else if (status === 'saved') { el.innerHTML = `✅ Сохранено: ${fmtT(time || Date.now())}`; el.style.color = '#5cb85c'; }
+  else if (status === 'dirty') { el.innerHTML = '⚠️ Есть несохранённые изменения'; el.style.color = '#f0ad4e'; }
+  else if (status === 'error') { el.innerHTML = '❌ Ошибка сохранения'; el.style.color = '#d9534f'; }
+  else if (status === 'idle') {
+    const last = window._lastSaveTime;
+    el.innerHTML = last ? `✅ Сохранено: ${fmtT(last)}` : 'Готово к сохранению';
+    el.style.color = last ? '#5cb85c' : '#8aa';
+  }
+}
+window.updateSaveStatus = updateSaveStatus;
+
+// ===== INIT: единый DOMContentLoaded =====
+document.addEventListener('DOMContentLoaded', () => {
+
+  // --- Слушатели полей формы рейса ---
+  ['tripName','dateStart','timeStart','dateEnd','timeEnd','stavkaEUR','dailyRate','rateEURPLN','rateEURBYN','prevDebt','tripNote'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.addEventListener('input',()=>{if(id==='dateStart'||id==='timeStart'||id==='dateEnd'||id==='timeEnd')updateDays();if(id==='dailyRate')updateKadFormula();scheduleAutosave();});
+    if(el.type==='date'||el.type==='time')el.addEventListener('change',()=>{updateDays();scheduleAutosave();});
+  });
+  document.getElementById('opSum').addEventListener('input',updateConvert);
+  document.getElementById('opCur').addEventListener('change',updateConvert);
+  document.getElementById('editOpSum').addEventListener('input',updateEditConvert);
+  document.getElementById('editOpCur').addEventListener('change',updateEditConvert);
+
+  // --- ПАТЧ 4: Фильтр ввода для числовых полей (только цифры, точка, запятая) ---
+  const numFields=['stavkaEUR','dailyRate','rateEURPLN','rateEURBYN','prevDebt','opSum','editOpSum'];
+  numFields.forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.addEventListener('input',function(){
+      let v=this.value.replace(/[^0-9.,]/g,'');
+      const firstSep=v.search(/[.,]/);
+      if(firstSep!==-1){
+        v=v.substring(0,firstSep+1)+v.substring(firstSep+1).replace(/[.,]/g,'');
+      }
+      if(this.value!==v)this.value=v;
+    });
+    el.addEventListener('blur',function(){
+      if(this.value && this.value.includes(','))this.value=this.value.replace(',','.');
+    });
+  });
+
+  // --- Кнопка "Сохранить" ---
+  const btn = document.getElementById('btnManualSave');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      if (typeof autoSaveTrip === 'function') autoSaveTrip();
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      updateSaveStatus('saving');
+      try {
+        if (window._saveTimer) { clearTimeout(window._saveTimer); window._saveTimer = null; }
+        if (window._saveToCloud) {
+          await window._saveToCloud();
+          window._lastSaveTime = Date.now();
+          window._localDirty = false;
+          updateSaveStatus('saved', window._lastSaveTime);
+          btn.innerHTML = '✅ Сохранено!';
+          setTimeout(() => { btn.innerHTML = '💾 Сохранить рейс'; }, 1500);
+        }
+      } catch(e) {
+        console.error('[SAVE BTN] Error:', e);
+        updateSaveStatus('error');
+        btn.innerHTML = '❌ Ошибка';
+        setTimeout(() => { btn.innerHTML = '💾 Сохранить рейс'; }, 2000);
+      } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+    });
+    btn.addEventListener('mousedown', () => { btn.style.transform = 'scale(0.98)'; });
+    btn.addEventListener('mouseup', () => { btn.style.transform = 'scale(1)'; });
+  }
+
+  // Стартовый статус
+  setTimeout(() => updateSaveStatus('idle'), 500);
+});
+
+// Принудительное сохранение при закрытии вкладки
+window.addEventListener('beforeunload', () => {
+  if (window._localDirty && window._saveToCloud) {
+    if (window._saveTimer) clearTimeout(window._saveTimer);
+    window._saveToCloud();
+  }
+});
+
+// Сохранение при сворачивании вкладки (важно для мобильных)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && window._localDirty && window._saveToCloud) {
+    if (window._saveTimer) clearTimeout(window._saveTimer);
+    window._saveToCloud();
+  }
+});
+</script>
+<script>
+// Service Worker: регистрируем если файл есть, иначе чистим старые
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    console.log('[SW] Registered:', reg.scope);
+  }).catch(() => {
+    // sw.js не найден — отменяем старые регистрации
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
+    });
+  });
+}
+</script>
+</body>
+</html>
